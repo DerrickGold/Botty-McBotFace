@@ -9,11 +9,14 @@
 #define MSG_LEN_EXCEED \
   "Message length exceeds %d byte limit. Message splitting not supported yet\n"
 
+#define CMD_CHAR '~'
 #define MAX_MSG_LEN 512
 #define MAX_SERV_LEN 63
 #define MAX_NICK_LEN 30
 #define MAX_CHAN_LEN 50
 #define MAX_CMD_LEN 9
+#define BOT_ARG_DELIM ' '
+#define MAX_BOT_ARGS 8
 
 typedef enum {
   CONSTATE_NONE,
@@ -32,12 +35,26 @@ typedef enum {
   CALLBACK_COUNT,
 } BotCallbackID;
 
+typedef enum {
+  CMDFLAG_MASTER = (1<<0),
+} CommandFlags;
+
+
+typedef struct BotCmd {
+  int flags;
+  char cmd[MAX_CMD_LEN];
+  int args;
+  int (*fn)(void *, char *a[MAX_BOT_ARGS]);
+  struct BotCmd *next;
+} BotCmd;
+
 //easy structure for reading details of an irc message
 typedef struct IrcMsg {
   char nick[MAX_NICK_LEN];
   char command[MAX_CMD_LEN];
   char channel[MAX_CHAN_LEN];
   char msg[MAX_MSG_LEN];
+  char *msgTok[MAX_BOT_ARGS];
 } IrcMsg;
 
 typedef struct IrcInfo {
@@ -53,6 +70,8 @@ typedef struct IrcInfo {
   ConState state;
   int (*cbfn[CALLBACK_COUNT])(struct IrcInfo *, IrcMsg *);
 } IrcInfo;
+
+static BotCmd *GlobalCmds = NULL;
 
 /*
  * Setter and callers for callbacks assigned to a given IrcInfo instance.
@@ -75,6 +94,112 @@ int callcb(BotCallbackID id, IrcInfo *info, IrcMsg *msg) {
   return -1;
 }
 
+/*
+ * Register a command for the bot to use
+ */
+void regcmd(BotCmd **commands, char *cmdtag, int flags, int args, int (*fn)(void *, char *a[MAX_BOT_ARGS])) {
+  if (!commands) return;
+
+  BotCmd *curCmd;
+  BotCmd *newcmd = calloc(1, sizeof(BotCmd));
+  if (!newcmd) {
+    perror("Command Alloc Error: ");
+    exit(1);
+  }
+  
+  strncpy(newcmd->cmd, cmdtag, MAX_CMD_LEN);
+  newcmd->args = args;
+  newcmd->fn = fn;
+  newcmd->flags = flags;
+  
+  if (!*commands) {
+    //first command
+    *commands = newcmd;
+    return;
+  }
+  
+  curCmd = *commands;
+  while (curCmd->next) curCmd = curCmd->next;
+  curCmd->next = newcmd;
+}
+
+BotCmd *getcmd(BotCmd *commands, char *command) {
+  BotCmd *curcmd = commands;
+  while (curcmd && strncmp(curcmd->cmd, command, MAX_CMD_LEN))
+    curcmd = curcmd->next;
+
+  return curcmd;
+}
+
+int callcmd(BotCmd *commands, char *command, IrcInfo *info, char *args[MAX_BOT_ARGS]) {
+
+  BotCmd *curcmd = getcmd(commands, command);
+  if (!curcmd) {
+    fprintf(stderr, "Command (%s) is not a registered command\n", command);
+    return -1;
+  }
+  
+  return curcmd->fn((void *)info, args);
+}
+
+
+
+IrcMsg *newMsg(char *input, BotCmd **cmd) {
+  IrcMsg *msg = NULL;
+  char *tok = NULL, *tok_off = NULL;
+  int i = 0;
+  
+  msg = calloc(1, sizeof(IrcMsg));
+  if (!msg) {
+    fprintf(stderr, "msg alloc error\n");
+    exit(1);
+  }
+
+  //first get the nick that created the message
+  tok = strtok_r(input, "!", &tok_off);
+  if (!tok) return msg;
+  strncpy(msg->nick, tok+1, MAX_NICK_LEN);
+  //skip host name
+  tok = strtok_r(NULL, " ", &tok_off);
+  if (!tok) return msg;
+
+  //get command issued
+  tok = strtok_r(NULL, " ", &tok_off);
+  if (!tok) return msg;
+  strncpy(msg->command, tok, MAX_CMD_LEN);
+
+  //get the channel or user the message originated from
+  tok = strtok_r(NULL, " ", &tok_off);
+  if (!tok) return msg;
+  strncpy(msg->channel, tok, MAX_CHAN_LEN);
+
+  //finally save the rest of the message
+  strncpy(msg->msg, tok_off+1, MAX_MSG_LEN);
+
+  //parse a given command
+  if (msg->msg[0] == CMD_CHAR && cmd) {
+    int argCount = MAX_BOT_ARGS;
+    tok = msg->msg + 1;
+    while(i < argCount) {
+      tok_off = strchr(tok, BOT_ARG_DELIM);
+      if (tok_off && i < argCount - 1) *tok_off = '\0';
+      msg->msgTok[i] = tok;
+    
+      if (i == 0) {
+        *cmd = getcmd(GlobalCmds, msg->msgTok[0]);
+        if (*cmd)  argCount = (*cmd)->args;
+      }
+      
+      if (!tok_off) break;
+      tok_off++;
+      tok = tok_off;
+      i++;
+    }
+  }
+
+  return msg;
+}
+
 
 /*
  * Some nice wrappers for connecting to a specific address and port.
@@ -86,7 +211,7 @@ int getConnectionInfo(const char *addr, const char *port, struct addrinfo **resu
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   if (addr == NULL)
-    hints.ai_flags = AI_PASSIVE;
+    return -1;
 
   int status = 0;
   if ((status = getaddrinfo(addr, port, &hints, results)) != 0) {
@@ -169,14 +294,14 @@ int sendAll(int sockfd, char *data, size_t len) {
 int ircSend(int fd, const char *msg) {
   int n = 0;
   const char *footer = "\r\n";
-  size_t ilen = strlen(msg), wlen = ilen;
+  size_t ilen = strlen(msg), wlen = strlen(footer);
   char wrapped[MAX_MSG_LEN];
   
-  if (ilen > MAX_MSG_LEN) {
+  if (ilen + wlen > MAX_MSG_LEN) {
     fprintf(stderr, MSG_LEN_EXCEED, MAX_MSG_LEN);
     return -1;
   }
-  wlen += strlen(footer);
+  wlen += ilen;
   
   strncpy(wrapped, msg, wlen);
   strncat(wrapped, footer, wlen);
@@ -184,6 +309,13 @@ int ircSend(int fd, const char *msg) {
   n = sendAll(fd, wrapped, wlen);
 
   return n;
+}
+
+int botSend(IrcInfo *info, char *target, char *msg) {
+  char buf[MAX_MSG_LEN];
+  if (!target) target = info->channel;
+  snprintf(buf, sizeof(buf), "PRIVMSG %s %s", target, msg);
+  return ircSend(info->servfd, buf);
 }
 
 /*
@@ -196,7 +328,7 @@ int parse(IrcInfo *info, char *line) {
   
   int n = 0;
   char sysBuf[MAX_MSG_LEN];
-  fprintf(stdout, "SERVER: %s\n", line);
+  //  fprintf(stdout, "SERVER: %s\n", line);
   
   //respond to server pings
   if (!strncmp(line, "PING", strlen("PING"))) {
@@ -230,8 +362,6 @@ int parse(IrcInfo *info, char *line) {
     break;
   case CONSTATE_JOINED:
     callcb(CALLBACK_JOIN, info, NULL);
-    snprintf(sysBuf, sizeof(sysBuf), "PRIVMSG %s Hello, World!", info->channel);
-    ircSend(info->servfd, sysBuf);
     info->state = CONSTATE_LISTENING;
     break;
   default:
@@ -245,9 +375,27 @@ int parse(IrcInfo *info, char *line) {
     if (!strncmp(line, sysBuf, strlen(sysBuf))) {
       //filter out messages that the bot says itself
       break;
-    } else
-      callcb(CALLBACK_MSG, info, NULL);
- 
+    } else {
+      BotCmd *cmd = NULL;
+      IrcMsg *msg = newMsg(line, &cmd);
+      if (cmd) {
+        //make sure who ever is calling the command has permission to do so
+        if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master)) {
+          fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
+          free(msg);
+          break;
+        }
+        
+        if (callcmd(GlobalCmds, cmd->cmd, info, msg->msgTok) < 0) {
+          free(msg);
+          return -1;
+        }
+      }
+      else {
+        callcb(CALLBACK_MSG, info, msg);
+        free(msg);
+      }
+    } 
     break;
   }
   return 0;
@@ -259,6 +407,7 @@ int parse(IrcInfo *info, char *line) {
  */
 void run(IrcInfo *info, int argc, char *argv[], int argstart) {
   struct addrinfo *res;
+  char stayAlive = 1;
   char recvBuf[MAX_MSG_LEN];
   int n;
   char *line = NULL, *line_off = NULL;
@@ -267,7 +416,7 @@ void run(IrcInfo *info, int argc, char *argv[], int argstart) {
   if (info->servfd < 0) exit(1);
   info->state = CONSTATE_NONE;
   
-  while (1) {
+  while (stayAlive) {
     line_off = NULL;
     memset(recvBuf, 0, sizeof(recvBuf));
     n = recv(info->servfd, recvBuf, sizeof(recvBuf), 0);
@@ -283,10 +432,14 @@ void run(IrcInfo *info, int argc, char *argv[], int argstart) {
     //parse replies one line at a time
     line = strtok_r(recvBuf, "\r\n", &line_off);
     while (line) {
-      if (parse(info, line)) break;
+      if (parse(info, line) < 0) {
+        stayAlive = 0;
+        break;
+      }
       line = strtok_r(NULL, "\r\n", &line_off);
     }    
   }
+  close(info->servfd);
   freeaddrinfo(res);
 }
 
@@ -300,10 +453,37 @@ int onConnect(IrcInfo *info, IrcMsg *msg) {
   return 0;
 }
 
-int onMsg(IrcInfo *info, IrcMsg *msg) {
-  printf("BOT HAS MESSAGE\n");
-  //add some awesome logic here!
+int onJoin(IrcInfo *info, IrcMsg *msg) {
+  botSend(info, NULL, "Hello, World!");
   return 0;
+}
+
+int onMsg(IrcInfo *info, IrcMsg *msg) {
+  if (!info || !msg) return -1;
+  printf("Recieved msg from %s in %s\n", msg->nick, msg->channel);
+  printf("%s\n", msg->msg);
+  return 0;
+}
+
+
+/*
+ * Some commands that the users can call.
+ */
+int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
+  printf("COMMAND RECEIVED: %s:\n", args[0]);
+  for (int i = 0; i < MAX_BOT_ARGS; i++) {
+    if (!args[i]) break;
+    printf("ARG %d: %s\n", i, args[i]);
+  }
+
+  botSend((IrcInfo *)i, NULL, args[1]);
+  return 0;
+}
+
+int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
+  printf("COMMAND RECEIVED: %s\n", args[0]);
+  botSend((IrcInfo *)i, NULL, "Seeya!");
+  return -1;
 }
 
 
@@ -315,16 +495,21 @@ int main(int argc, char *argv[]) {
     .port = "CHANGE THIS",
     .ident = "CIrcBot",
     .realname = "Botty McBotFace",
-    .master = "CHANGE THIS",
+    .master = "Derrick",
     .server = "CHANGE THIS",
     .channel = "#CHANGETHIS",
     .cbfn = {0}
   };
 
   setcb(&conInfo, CALLBACK_CONNECT, &onConnect);
+  setcb(&conInfo, CALLBACK_JOIN, &onJoin);
   setcb(&conInfo, CALLBACK_MSG, &onMsg);
-  run(&conInfo, argc, argv, 0);
+
+  //register some commands
+  regcmd(&GlobalCmds, "say", 0, 2, &botcmd_say);
+  regcmd(&GlobalCmds, "die", CMDFLAG_MASTER, 1, &botcmd_die);
   
+  run(&conInfo, argc, argv, 0);
   return 0;
 }
 

@@ -32,6 +32,7 @@ typedef enum {
   CALLBACK_JOIN,
   CALLBACK_MSG,
   CALLBACK_USRJOIN,
+  CALLBACK_USRPART,
   CALLBACK_COUNT,
 } BotCallbackID;
 
@@ -51,7 +52,7 @@ typedef struct BotCmd {
 //easy structure for reading details of an irc message
 typedef struct IrcMsg {
   char nick[MAX_NICK_LEN];
-  char command[MAX_CMD_LEN];
+  char action[MAX_CMD_LEN];
   char channel[MAX_CHAN_LEN];
   char msg[MAX_MSG_LEN];
   char *msgTok[MAX_BOT_ARGS];
@@ -146,6 +147,7 @@ int callcmd(BotCmd *commands, char *command, IrcInfo *info, char *args[MAX_BOT_A
 
 IrcMsg *newMsg(char *input, BotCmd **cmd) {
   IrcMsg *msg = NULL;
+  char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
   int i = 0;
   
@@ -163,16 +165,18 @@ IrcMsg *newMsg(char *input, BotCmd **cmd) {
   tok = strtok_r(NULL, " ", &tok_off);
   if (!tok) return msg;
 
-  //get command issued
+  //get action issued
   tok = strtok_r(NULL, " ", &tok_off);
   if (!tok) return msg;
-  strncpy(msg->command, tok, MAX_CMD_LEN);
+  strncpy(msg->action, tok, MAX_CMD_LEN);
 
   //get the channel or user the message originated from
   tok = strtok_r(NULL, " ", &tok_off);
   if (!tok) return msg;
   strncpy(msg->channel, tok, MAX_CHAN_LEN);
 
+  if (!tok_off || tok_off + 1 >= end) return msg;
+  
   //finally save the rest of the message
   strncpy(msg->msg, tok_off+1, MAX_MSG_LEN);
 
@@ -326,9 +330,9 @@ int botSend(IrcInfo *info, char *target, char *msg) {
 int parse(IrcInfo *info, char *line) {
   if (!line) return 0;
   
-  int n = 0;
+  int n = 0, status = 0;
   char sysBuf[MAX_MSG_LEN];
-  //  fprintf(stdout, "SERVER: %s\n", line);
+  fprintf(stdout, "SERVER: %s\n", line);
   
   //respond to server pings
   if (!strncmp(line, "PING", strlen("PING"))) {
@@ -371,34 +375,38 @@ int parse(IrcInfo *info, char *line) {
       //filter out messages from the server
       break;
     }
+    
     snprintf(sysBuf, sizeof(sysBuf), ":%s", info->nick);
     if (!strncmp(line, sysBuf, strlen(sysBuf))) {
       //filter out messages that the bot says itself
       break;
-    } else {
+    }
+    else {
       BotCmd *cmd = NULL;
       IrcMsg *msg = newMsg(line, &cmd);
-      if (cmd) {
-        //make sure who ever is calling the command has permission to do so
-        if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master)) {
-          fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
-          free(msg);
-          break;
-        }
+      
+      if (!strcmp(msg->action, "JOIN"))
+        status = callcb(CALLBACK_USRJOIN, info, msg);
         
-        if (callcmd(GlobalCmds, cmd->cmd, info, msg->msgTok) < 0) {
-          free(msg);
-          return -1;
-        }
-      }
+      else if (!strcpy(msg->action, "PART"))
+        status = callcb(CALLBACK_USRPART, info, msg);
+      
       else {
-        callcb(CALLBACK_MSG, info, msg);
-        free(msg);
+        if (cmd) {
+          //make sure who ever is calling the command has permission to do so
+          if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master))
+            fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
+          else if ((status = callcmd(GlobalCmds, cmd->cmd, info, msg->msgTok)) < 0)
+            fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
+        }
+        else 
+          callcb(CALLBACK_MSG, info, msg);
       }
+      free(msg);
     } 
     break;
   }
-  return 0;
+  return status;
 }
 
 /*
@@ -465,6 +473,19 @@ int onMsg(IrcInfo *info, IrcMsg *msg) {
   return 0;
 }
 
+int onUsrJoin(IrcInfo *info, IrcMsg *msg) {
+  if (!info || !msg) return -1;
+  printf("%s has joined the channel\n", msg->nick);
+  return 0;
+}
+
+int onUsrPart(IrcInfo *info, IrcMsg *msg) {
+  if (!info || !msg) return -1;
+
+  printf("%s has left the channel\n", msg->nick);
+  return 0;
+}
+ 
 
 /*
  * Some commands that the users can call.
@@ -492,7 +513,7 @@ int main(int argc, char *argv[]) {
   IrcInfo conInfo = {
     .host = "CIRCBotHost",
     .nick = "CIrcBot",
-    .port = "CHANGE THIS",
+    .port = "6667",
     .ident = "CIrcBot",
     .realname = "Botty McBotFace",
     .master = "Derrick",
@@ -504,7 +525,9 @@ int main(int argc, char *argv[]) {
   setcb(&conInfo, CALLBACK_CONNECT, &onConnect);
   setcb(&conInfo, CALLBACK_JOIN, &onJoin);
   setcb(&conInfo, CALLBACK_MSG, &onMsg);
-
+  setcb(&conInfo, CALLBACK_USRJOIN, &onUsrJoin);
+  setcb(&conInfo, CALLBACK_USRPART, &onUsrPart);
+  
   //register some commands
   regcmd(&GlobalCmds, "say", 0, 2, &botcmd_say);
   regcmd(&GlobalCmds, "die", CMDFLAG_MASTER, 1, &botcmd_die);

@@ -7,7 +7,6 @@
 typedef enum {
   CONSTATE_NONE,
   CONSTATE_CONNECTED,
-  CONSTATE_CONFIRM_REG,
   CONSTATE_REGISTERED,
   CONSTATE_JOINED,
   CONSTATE_LISTENING,
@@ -16,7 +15,7 @@ typedef enum {
 
 typedef struct IrcInfo {
   char host[256];
-  char nick[MAX_NICK_LEN];
+  char nick[NICK_ATTEMPTS][MAX_NICK_LEN];
   char port[6];
   char ident[10];
   char realname[64];
@@ -25,7 +24,7 @@ typedef struct IrcInfo {
   char channel[MAX_CHAN_LEN];
   int servfd;
   ConState state;
-  int nickNum;
+  int nickAttempt;
 } IrcInfo;
 
 extern int run(IrcInfo *info, int argc, char *argv[], int argstart);

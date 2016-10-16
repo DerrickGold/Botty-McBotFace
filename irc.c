@@ -10,6 +10,8 @@
 #include "callback.h"
 #include "connection.h"
 
+int parse(IrcInfo *info, char *line);
+
 /*
  * Adds the required trailing '\r\n' to any message sent
  * to the irc server, and then procedes to send the message.
@@ -41,6 +43,54 @@ int botSend(IrcInfo *info, char *target, char *msg) {
   return ircSend(info->servfd, buf);
 }
 
+
+
+static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
+  //if nick is already registered, try a new one
+  if (!strncmp(msg->action, REG_ERR_CODE, strlen(REG_ERR_CODE))) {
+    if (info->nickAttempt < NICK_ATTEMPTS) info->nickAttempt++;
+    else {
+      fprintf(stderr, "Exhuasted nick attempts, please configure a unique nick\n");
+      return -1;
+    }
+    fprintf(stderr, "Nick is already in use, attempting to use: %s\n", info->nick[info->nickAttempt]);
+    //then attempt registration again
+    info->state = CONSTATE_CONNECTED;
+    parse(info, line);
+  }
+  //otherwise, nick is not in use
+  else if (!strncmp(msg->action, REG_SUC_CODE, strlen(REG_SUC_CODE))) {
+    info->state = CONSTATE_REGISTERED;
+  }
+  
+  return 0;
+}
+
+
+
+
+static int parseServer(IrcInfo *info, char *line) {
+  char buf[MAX_MSG_LEN];
+  char *start = buf;
+  
+  snprintf(buf, sizeof(buf), ":%s", info->server);
+  //not a server response
+  if (strncmp(line, buf, strlen(buf))) return 0;
+  //is a server response
+  strncpy(buf, line + strlen(info->server) + 1, MAX_MSG_LEN);
+  IrcMsg *msg = servMsg(line);
+  int status = defaultServActions(info, msg, line);
+  if (status) {
+    free(msg);
+    return status;
+  }
+  
+  callback_call(CALLBACK_SERVERCODE, (void *)info, msg);
+  free(msg);
+  return 0;
+}
+
+
 /*
  * Parses any incomming line from the irc server and 
  * invokes callbacks depending on the message type and
@@ -52,7 +102,7 @@ int parse(IrcInfo *info, char *line) {
   int status = 0;
   char sysBuf[MAX_MSG_LEN];
   char *space = NULL, *space_off = NULL;
-  fprintf(stdout, "SERVER: %s\n", line);
+  //fprintf(stdout, "SERVER: %s\n", line);
   
   //respond to server pings
   if (!strncmp(line, "PING", strlen("PING"))) {
@@ -62,10 +112,11 @@ int parse(IrcInfo *info, char *line) {
     return 0;
   }
   
+  if (parseServer(info, line) < 0) return -1;
+  
   switch (info->state) {
   case CONSTATE_NONE:
     //initialize data here
-    info->nickNum = -1;
     space = strtok_r(line, " ", &space_off);
     if (space) {
       //grab new server name if we've been redirected
@@ -78,30 +129,14 @@ int parse(IrcInfo *info, char *line) {
     
   case CONSTATE_CONNECTED:
     //register the bot
-    snprintf(sysBuf, sizeof(sysBuf), "NICK %s", info->nick);
+    snprintf(sysBuf, sizeof(sysBuf), "NICK %s", info->nick[info->nickAttempt]);
     ircSend(info->servfd, sysBuf);
     snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", info->ident, info->host, info->realname);
     ircSend(info->servfd, sysBuf);
-    info->state = CONSTATE_CONFIRM_REG;
+    //go to listening state to wait for registration confirmation
+    info->state = CONSTATE_LISTENING;
     break;
 
-  case CONSTATE_CONFIRM_REG:
-    //make sure nick is not already in use
-    space = line + strlen(info->server) + 2;
-    if (!strncmp(space, REG_ERR_CODE, strlen(REG_ERR_CODE))) {
-      if (strlen(info->nick) < MAX_NICK_LEN) {
-        snprintf(sysBuf, sizeof(sysBuf), "%d", ++info->nickNum);
-        strncat(info->nick, sysBuf, MAX_NICK_LEN);
-      }
-      fprintf(stderr, "Nick is already in use, attempting to use: %s\n", info->nick);
-      info->state = CONSTATE_CONNECTED;
-      status = parse(info, line);
-    }
-    else if (!strncmp(space, REG_SUC_CODE, strlen(REG_SUC_CODE)))
-      info->state = CONSTATE_REGISTERED;
-    
-    break;
-    
   case CONSTATE_REGISTERED:
     snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", info->channel);
     ircSend(info->servfd, sysBuf);
@@ -113,13 +148,7 @@ int parse(IrcInfo *info, char *line) {
     break;
   default:
   case CONSTATE_LISTENING:
-    snprintf(sysBuf, sizeof(sysBuf), ":%s", info->server);
-    if (!strncmp(line, sysBuf, strlen(sysBuf))) {
-      //filter out messages from the server
-      break;
-    }
-    
-    snprintf(sysBuf, sizeof(sysBuf), ":%s", info->nick);
+    snprintf(sysBuf, sizeof(sysBuf), ":%s", info->nick[info->nickAttempt]);
     if (!strncmp(line, sysBuf, strlen(sysBuf))) {
       //filter out messages that the bot says itself
       break;

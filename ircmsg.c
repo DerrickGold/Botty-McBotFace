@@ -64,3 +64,47 @@ IrcMsg *newMsg(char *input, BotCmd **cmd) {
 
   return msg;
 }
+
+IrcMsg *servMsg(char *input) {
+  IrcMsg *msg = NULL;
+  int i = 0;
+  char *end = input + strlen(input);
+  char *tok = NULL, *tok_off = NULL;
+
+  msg = calloc(1, sizeof(IrcMsg));
+  if (!msg) {
+    fprintf(stderr, "msg alloc error\n");
+    exit(1);
+  }
+  
+  msg->server = 1;
+  //skip the server
+  tok = strtok_r(input, " ", &tok_off);
+  if (!tok) return msg;
+  
+  //copy the status code
+  tok = strtok_r(NULL, " ", &tok_off);
+  if (!tok) return msg;
+  strncpy(msg->action, tok, MAX_CMD_LEN);
+  
+  //skip the name the server issued the command to
+  tok = strtok_r(NULL, " ", &tok_off);
+  if (!tok || !tok_off || tok_off + 1 >= end) return msg;
+
+  //copy the rest of the message
+  strncpy(msg->msg, tok_off, MAX_MSG_LEN); 
+
+  //tokenize the parameters given by the server
+  tok = msg->msg;
+  tok += (*tok == PARAM_DELIM);
+  while(i < MAX_PARAMETERS) {
+    tok_off = strchr(tok, PARAM_DELIM);
+    msg->msgTok[i] = tok;
+    if (!tok_off || i >= MAX_PARAMETERS - 1) break;
+    (*tok_off++) = '\0';
+    tok = tok_off;
+    i++;
+  }
+  
+  return msg;
+}

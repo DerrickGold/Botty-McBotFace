@@ -6,13 +6,21 @@
 
 #define SERVER_PREFIX "irc."
 #define CMD_CHAR '~'
+#define PARAM_DELIM ':'
+#define BOT_ARG_DELIM ' '
+
+//number of alternative nicks and attempts the bot should try
+//before giving up registering to the server
+#define NICK_ATTEMPTS 3
+
 #define MAX_MSG_LEN 512
 #define MAX_SERV_LEN 63
 #define MAX_NICK_LEN 30
 #define MAX_CHAN_LEN 50
 #define MAX_CMD_LEN 9
-#define BOT_ARG_DELIM ' '
 #define MAX_BOT_ARGS 8
+#define MAX_PARAMETERS 15
+
 
 #define REG_ERR_CODE "433"
 #define REG_SUC_CODE "001"

@@ -40,6 +40,20 @@ int onUsrPart(void *data, IrcMsg *msg) {
   printf("%s has left the channel\n", msg->nick);
   return 0;
 }
+
+
+int onServerResp(void *data, IrcMsg *msg) {
+  if (!data || !msg) return -1;
+
+  printf("Received code: %s\n", msg->action);
+  for (int i = 0; i < MAX_PARAMETERS; i++) {
+    if (!msg->msgTok[i]) break;
+
+    printf("Parameter %d: %s\n", i, msg->msgTok[i]);
+  }
+
+  return 0;
+}
  
 /*
  * Some commands that the users can call.
@@ -68,13 +82,13 @@ int main(int argc, char *argv[]) {
   
   IrcInfo conInfo = {
     .host 		= "CIRCBotHost",
-    .nick 		= "CIrcBot",
+    .nick 		= {"CIrcBot", "CIrcBot2", "CIrcBot3"},
     .port 		= "6667",
     .ident 		= "CIrcBot",
     .realname = "Botty McBotFace",
     .master 	= "Derrick",
-    .server 	= "CHANGETHIS",
-    .channel 	= "#CHANGETHIS",
+    .server 	= "CHANGE THIS",
+    .channel 	= "#CHANGE THIS",
   };
 
   //hook in some callback functions
@@ -83,6 +97,8 @@ int main(int argc, char *argv[]) {
   callback_set(CALLBACK_MSG, &onMsg);
   callback_set(CALLBACK_USRJOIN, &onUsrJoin);
   callback_set(CALLBACK_USRPART, &onUsrPart);
+
+  callback_set(CALLBACK_SERVERCODE, &onServerResp);
   
   //register some commands
   command_reg("say", 0, 2, &botcmd_say);

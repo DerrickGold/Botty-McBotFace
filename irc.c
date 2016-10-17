@@ -9,6 +9,7 @@
 #include "commands.h"
 #include "callback.h"
 #include "connection.h"
+#include "cmddata.h"
 
 int parse(IrcInfo *info, char *line);
 
@@ -36,6 +37,9 @@ int ircSend(int fd, const char *msg) {
   return n;
 }
 
+/*
+ * Automatically formats a PRIVMSG command for the bot to speak.
+ */
 int botSend(IrcInfo *info, char *target, char *msg) {
   char buf[MAX_MSG_LEN];
   if (!target) target = info->channel;
@@ -43,8 +47,9 @@ int botSend(IrcInfo *info, char *target, char *msg) {
   return ircSend(info->servfd, buf);
 }
 
-
-
+/*
+ * Default actions for handling various server responses such as nick collisions
+ */
 static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
   //if nick is already registered, try a new one
   if (!strncmp(msg->action, REG_ERR_CODE, strlen(REG_ERR_CODE))) {
@@ -56,7 +61,7 @@ static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
     fprintf(stderr, "Nick is already in use, attempting to use: %s\n", info->nick[info->nickAttempt]);
     //then attempt registration again
     info->state = CONSTATE_CONNECTED;
-    parse(info, line);
+    return parse(info, line);
   }
   //otherwise, nick is not in use
   else if (!strncmp(msg->action, REG_SUC_CODE, strlen(REG_SUC_CODE))) {
@@ -67,18 +72,18 @@ static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
 }
 
 
-
-
+/*
+ * Parse out any server responses that may need to be attended to
+ * and pass them into the appropriate callbacks.
+ */
 static int parseServer(IrcInfo *info, char *line) {
   char buf[MAX_MSG_LEN];
-  char *start = buf;
-  
   snprintf(buf, sizeof(buf), ":%s", info->server);
   //not a server response
   if (strncmp(line, buf, strlen(buf))) return 0;
   //is a server response
-  strncpy(buf, line + strlen(info->server) + 1, MAX_MSG_LEN);
-  IrcMsg *msg = servMsg(line);
+  strncpy(buf, line, MAX_MSG_LEN);
+  IrcMsg *msg = servMsg(buf);
   int status = defaultServActions(info, msg, line);
   if (status) {
     free(msg);
@@ -89,7 +94,6 @@ static int parseServer(IrcInfo *info, char *line) {
   free(msg);
   return 0;
 }
-
 
 /*
  * Parses any incomming line from the irc server and 
@@ -102,7 +106,7 @@ int parse(IrcInfo *info, char *line) {
   int status = 0;
   char sysBuf[MAX_MSG_LEN];
   char *space = NULL, *space_off = NULL;
-  //fprintf(stdout, "SERVER: %s\n", line);
+  fprintf(stdout, "SERVER: %s\n", line);
   
   //respond to server pings
   if (!strncmp(line, "PING", strlen("PING"))) {
@@ -112,7 +116,8 @@ int parse(IrcInfo *info, char *line) {
     return 0;
   }
   
-  if (parseServer(info, line) < 0) return -1;
+  if ((status = parseServer(info, line)) < 0) return -1;
+  else if (status) return 0;
   
   switch (info->state) {
   case CONSTATE_NONE:
@@ -158,22 +163,21 @@ int parse(IrcInfo *info, char *line) {
       IrcMsg *msg = newMsg(line, &cmd);
       
       if (!strcmp(msg->action, "JOIN"))
-        status = callback_call(CALLBACK_USRJOIN, (void*)info, msg);
-        
+        status = callback_call(CALLBACK_USRJOIN, (void*)info, msg);        
       else if (!strcpy(msg->action, "PART"))
         status = callback_call(CALLBACK_USRPART, (void*)info, msg);
-      
-      else {
-        if (cmd) {
-          //make sure who ever is calling the command has permission to do so
-          if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master))
-            fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
-          else if ((status = command_call(cmd->cmd, info, msg->msgTok)) < 0)
-            fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
-        }
-        else 
-          callback_call(CALLBACK_MSG, (void*)info, msg);
+      else if (cmd) {
+        CmdData data = { .info = info, .msg = msg };
+        
+        //make sure who ever is calling the command has permission to do so
+        if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master))
+          fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
+        else if ((status = command_call(cmd->cmd, (void *)&data, msg->msgTok)) < 0)
+          fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
       }
+      else 
+        callback_call(CALLBACK_MSG, (void*)info, msg);
+
       free(msg);
     } 
     break;

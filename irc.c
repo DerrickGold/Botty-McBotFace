@@ -3,6 +3,8 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <signal.h>
+#include <poll.h>
 
 #include "irc.h"
 #include "ircmsg.h"
@@ -41,7 +43,7 @@ int _botSend(IrcInfo *info, char *target, char *fmt, va_list a) {
   if (!target) target = info->channel;
   snprintf(fmtBuf, sizeof(fmtBuf), "PRIVMSG %s :%s", target, fmt);
   vsnprintf(buf, sizeof(buf), fmtBuf, a); 
-  return ircSend(info->servfd, buf);
+  return ircSend(info->servfds.fd, buf);
 }
 
 int botSend(IrcInfo *info, char *target, char *fmt, ...) {
@@ -76,7 +78,8 @@ static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
     fprintf(stderr, "Nick is already in use, attempting to use: %s\n", info->nick[info->nickAttempt]);
     //then attempt registration again
     info->state = CONSTATE_CONNECTED;
-    return parse(info, line);
+    //return parse(info, line);
+    return 0;
   }
   //otherwise, nick is not in use
   else if (!strncmp(msg->action, REG_SUC_CODE, strlen(REG_SUC_CODE))) {
@@ -127,7 +130,7 @@ int parse(IrcInfo *info, char *line) {
   if (!strncmp(line, "PING", strlen("PING"))) {
     char *pong = line + strlen("PING") + 1;
     snprintf(sysBuf, sizeof(sysBuf), "PONG %s", pong);
-    ircSend(info->servfd, sysBuf);
+    ircSend(info->servfds.fd, sysBuf);
     return 0;
   }
   
@@ -150,16 +153,16 @@ int parse(IrcInfo *info, char *line) {
   case CONSTATE_CONNECTED:
     //register the bot
     snprintf(sysBuf, sizeof(sysBuf), "NICK %s", info->nick[info->nickAttempt]);
-    ircSend(info->servfd, sysBuf);
+    ircSend(info->servfds.fd, sysBuf);
     snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", info->ident, info->host, info->realname);
-    ircSend(info->servfd, sysBuf);
+    ircSend(info->servfds.fd, sysBuf);
     //go to listening state to wait for registration confirmation
     info->state = CONSTATE_LISTENING;
     break;
 
   case CONSTATE_REGISTERED:
     snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", info->channel);
-    ircSend(info->servfd, sysBuf);
+    ircSend(info->servfds.fd, sysBuf);
     info->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
@@ -200,22 +203,15 @@ int parse(IrcInfo *info, char *line) {
   return status;
 }
 
-/*
- * Run the bot! The bot will connect to the server and start
- * parsing replies.
- */
-int run(IrcInfo *info, int argc, char *argv[], int argstart) {
-  struct addrinfo *res;
-  char stayAlive = 1;
-  char recvBuf[MAX_MSG_LEN];
-  int n;
-  char *line = NULL, *line_off = NULL;
-
-  info->servfd = clientInit(info->server, info->port, &res);
-  if (info->servfd < 0) exit(1);
+int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart) {
+  if (!info) return -1;
+  
+  info->servfds.fd = clientInit(info->server, info->port, &info->res);
+  if (info->servfds.fd < 0) exit(1);
   info->state = CONSTATE_NONE;
-
-  n = strlen(SERVER_PREFIX);
+  info->servfds.events = POLLIN | POLLPRI | POLLOUT | POLLWRBAND;
+  
+  int n = strlen(SERVER_PREFIX);
   if (strncmp(SERVER_PREFIX, info->server, n)) {
     int servLen = strlen(info->server);
     if (servLen + n < MAX_SERV_LEN) {
@@ -225,30 +221,45 @@ int run(IrcInfo *info, int argc, char *argv[], int argstart) {
     }
   }  
 
-  while (stayAlive) {
-    line_off = NULL;
-    memset(recvBuf, 0, sizeof(recvBuf));
-    n = recv(info->servfd, recvBuf, sizeof(recvBuf), 0);
+  return 0;
+}
+
+void bot_cleanup(IrcInfo *info) {
+  if (!info) return;
+  close(info->servfds.fd);
+  freeaddrinfo(info->res);
+}
+
+/*
+ * Run the bot! The bot will connect to the server and start
+ * parsing replies.
+ */
+int bot_run(IrcInfo *info) {
+  int n, ret;
+  //process all input first before receiving more
+  if (info->line) {
+    if ((ret = poll(&info->servfds, 1, POLL_TIMEOUT_MS)) && info->servfds.revents & POLLOUT) {
+      if ((n = parse(info, info->line)) < 0) return n;
+      info->line = strtok_r(NULL, "\r\n", &info->line_off);
+    }
+    return 0;
+  }    
+  
+  info->line_off = NULL;
+  memset(info->recvbuf, 0, sizeof(info->recvbuf));
+  if ((ret = poll(&info->servfds, 1, POLL_TIMEOUT_MS)) && info->servfds.revents & POLLIN) {
+    n = recv(info->servfds.fd, info->recvbuf, sizeof(info->recvbuf), 0);    
     if (!n) {
       printf("Remote closed connection\n");
-      break;
+      return -2;
     }
     else if (n < 0) {
       perror("Response error: ");
-      break;
+      return -3;
     }
-
-    //parse replies one line at a time
-    line = strtok_r(recvBuf, "\r\n", &line_off);
-    while (line) {
-      if (parse(info, line) < 0) {
-        stayAlive = 0;
-        break;
-      }
-      line = strtok_r(NULL, "\r\n", &line_off);
-    }    
   }
-  close(info->servfd);
-  freeaddrinfo(res);
+  
+  //parse replies one line at a time
+  info->line = strtok_r(info->recvbuf, "\r\n", &info->line_off);
   return 0;
 }

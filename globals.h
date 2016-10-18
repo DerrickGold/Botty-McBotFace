@@ -10,7 +10,7 @@
 #define BOT_ARG_DELIM ' '
 #define MSG_FOOTER "\r\n"
 #define CTCP_MARKER "\x01"
-
+#define POLL_TIMEOUT_MS 100
 
 //number of alternative nicks and attempts the bot should try
 //before giving up registering to the server

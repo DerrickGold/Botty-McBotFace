@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <poll.h>
 
 #include "globals.h"
 #include "commands.h"
@@ -77,7 +78,7 @@ int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
   printf("COMMAND RECEIVED: %s\n", args[0]);
   CmdData *data = (CmdData *)i;
   botSend(data->info, NULL, "Seeya!");
-  ircSend(data->info->servfd, "QUIT :leaving");
+  ircSend(data->info->servfds.fd, "QUIT :leaving");
   return -1;
 }
 
@@ -164,6 +165,7 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
 
 
 int main(int argc, char *argv[]) {
+  int status = 0;
   time_t t;
   srand((unsigned) time(&t));
       
@@ -174,8 +176,8 @@ int main(int argc, char *argv[]) {
     .ident 		= "CIrcBot",
     .realname	= "Botty McBotFace",
     .master		= "Derrick",
-    .server		= "CHANGE THIS",
-    .channel	= "#CHANGE THIS",
+    .server		= "awx.io",
+    .channel	= "#bottester",
   };
 
   //hook in some callback functions
@@ -192,7 +194,10 @@ int main(int argc, char *argv[]) {
   command_reg("roulette", 0, 1, &botcmd_roulette);
   command_reg("roll", 0, 2, &botcmd_roll);
   
-  //run the bot
-  return run(&conInfo, argc, argv, 0);
+  bot_connect(&conInfo, argc, argv, 0);
+  while (((status = bot_run(&conInfo)) >= 0)) {}
+  bot_cleanup(&conInfo);
+  
+  return status;
 }
 

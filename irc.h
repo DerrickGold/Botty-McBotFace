@@ -15,6 +15,7 @@ typedef enum {
 
 
 typedef struct IrcInfo {
+  //user config values
   char host[256];
   char nick[NICK_ATTEMPTS][MAX_NICK_LEN];
   char port[6];
@@ -23,12 +24,21 @@ typedef struct IrcInfo {
   char master[30];
   char server[MAX_SERV_LEN];
   char channel[MAX_CHAN_LEN];
-  int servfd;
+
+  //connection state info
+  struct addrinfo *res;
+  struct pollfd servfds;
+  char recvbuf[MAX_MSG_LEN];
+  char *line, *line_off;
   ConState state;
   int nickAttempt;
 } IrcInfo;
 
-extern int run(IrcInfo *info, int argc, char *argv[], int argstart);
+extern int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart);
+
+extern void bot_cleanup(IrcInfo *info);
+
+extern int bot_run(IrcInfo *info);
 
 extern int ircSend(int fd, const char *msg);
 

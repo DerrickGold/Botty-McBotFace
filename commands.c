@@ -6,6 +6,11 @@
 #include "commands.h"
 
 static BotCmd *cmds = NULL;
+
+BotCmd *command_global(void) {
+  return cmds;
+}
+
 /*
  * Register a command for the bot to use
  */

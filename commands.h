@@ -17,6 +17,8 @@ typedef struct BotCmd {
 
 typedef int (*CommandFn)(void *, char *a[MAX_BOT_ARGS]);
 
+extern BotCmd *command_global(void);
+
 extern void command_reg_r(BotCmd **commands, char *cmdtag, int flags, int args, CommandFn fn);
 extern void command_reg(char *cmdtag, int flags, int args, CommandFn fn);
 

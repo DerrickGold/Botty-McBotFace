@@ -12,6 +12,35 @@
 #include "irc.h"
 #include "cmddata.h"
 
+#define BOT_COUNT 2
+#define SERVER "CHANGE THIS"
+#define CHANNEL "#CHANGE THIS"
+
+
+IrcInfo conInfo[BOT_COUNT] = {
+  {
+    .host 		= "CIRCBotHost",
+    .nick 		= {"DiceBot", "CIrcBot2", "CIrcBot3"},
+    .port 		= "6667",
+    .ident 		= "CIrcBot",
+    .realname	= "Botty McBotFace",
+    .master		= "Derrick",
+    .server		= SERVER,
+    .channel	= CHANNEL,
+  },
+  {
+    .host 		= "CIRCBotHost",
+    .nick 		= {"GunBot", "CIrcBot2", "CIrcBot3"},
+    .port 		= "6667",
+    .ident 		= "CIrcBot",
+    .realname	= "Botty McBotFace",
+    .master		= "Derrick",
+    .server		= SERVER,
+    .channel	= CHANNEL,
+  }
+};
+
+
 /*
  * Callback functions can be used for adding
  * features or logic to notable  responses or events.
@@ -162,23 +191,58 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
 }
 
 
+/*
+ * Single bot with all functions
+ */
+int singlebot(int argc, char *argv[]) {
+  int status = 0;
+  
+  //register some commands
+  bot_addcommand(&conInfo[0], "say", 0, 2, &botcmd_say);
+  bot_addcommand(&conInfo[0], "die", CMDFLAG_MASTER, 1, &botcmd_die);
+  bot_addcommand(&conInfo[0],"roll", 0, 2, &botcmd_roll);
+  bot_addcommand(&conInfo[0], "roulette", 0, 1, &botcmd_roulette);
+  
+  bot_connect(&conInfo[0], argc, argv, 0);
+  while (((status = bot_run(&conInfo[0])) >= 0)) {}
+  bot_cleanup(&conInfo[0]);
+  
+  return status;
+}
 
+/*
+ * Using multiple bots with different functions.
+ */
+int multibot(int argc, char *argv[]) {
+  //register some commands
+  //bot 1 has roll
+  bot_addcommand(&conInfo[0],"roll", 0, 2, &botcmd_roll);
+  //bot 2 has roulette
+  bot_addcommand(&conInfo[1], "roulette", 0, 1, &botcmd_roulette);
+
+  int status[BOT_COUNT] = {0}, exitsum = 0;
+  for (int i = 0; i < BOT_COUNT; i++) {
+    //default commands
+    bot_addcommand(&conInfo[i], "say", 0, 2, &botcmd_say);
+    bot_addcommand(&conInfo[i], "die", CMDFLAG_MASTER, 1, &botcmd_die);
+    bot_connect(&conInfo[i], argc, argv, 0);
+  }
+  
+  while (exitsum < BOT_COUNT) {
+    for (int i = 0; i < BOT_COUNT; i++) {
+      if (status[i] >= 0) {
+        status[i] = bot_run(&conInfo[i]);
+        exitsum += status[i] < 0;
+      }
+    }
+  }
+  for (int i = 0; i < BOT_COUNT; i++) bot_cleanup(&conInfo[i]);
+  return 0;
+}
 
 int main(int argc, char *argv[]) {
-  int status = 0;
   time_t t;
   srand((unsigned) time(&t));
-      
-  IrcInfo conInfo = {
-    .host 		= "CIRCBotHost",
-    .nick 		= {"CIrcBot", "CIrcBot2", "CIrcBot3"},
-    .port 		= "6667",
-    .ident 		= "CIrcBot",
-    .realname	= "Botty McBotFace",
-    .master		= "Derrick",
-    .server		= "awx.io",
-    .channel	= "#bottester",
-  };
 
   //hook in some callback functions
   callback_set(CALLBACK_CONNECT, &onConnect);
@@ -187,17 +251,8 @@ int main(int argc, char *argv[]) {
   callback_set(CALLBACK_USRJOIN, &onUsrJoin);
   callback_set(CALLBACK_USRPART, &onUsrPart);
   callback_set(CALLBACK_SERVERCODE, &onServerResp);
-  
-  //register some commands
-  command_reg("say", 0, 2, &botcmd_say);
-  command_reg("die", CMDFLAG_MASTER, 1, &botcmd_die);
-  command_reg("roulette", 0, 1, &botcmd_roulette);
-  command_reg("roll", 0, 2, &botcmd_roll);
-  
-  bot_connect(&conInfo, argc, argv, 0);
-  while (((status = bot_run(&conInfo)) >= 0)) {}
-  bot_cleanup(&conInfo);
-  
-  return status;
+
+  if (BOT_COUNT < 2) return singlebot(argc, argv);
+  return multibot(argc, argv);
 }
 

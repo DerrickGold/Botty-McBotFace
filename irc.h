@@ -3,7 +3,7 @@
 
 #include <stdarg.h>
 #include "globals.h"
-#include "callback.h"
+#include "commands.h"
 
 typedef enum {
   CONSTATE_NONE,
@@ -32,7 +32,11 @@ typedef struct IrcInfo {
   char *line, *line_off;
   ConState state;
   int nickAttempt;
+
+  BotCmd *commands;
 } IrcInfo;
+
+extern void bot_addcommand(IrcInfo *info, char *cmd, int flags, int args, CommandFn fn);
 
 extern int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart);
 

@@ -139,6 +139,7 @@ int parse(IrcInfo *info, char *line) {
   
   switch (info->state) {
   case CONSTATE_NONE:
+    if (!info->commands) info->commands = command_global();
     //initialize data here
     space = strtok_r(line, " ", &space_off);
     if (space) {
@@ -178,7 +179,7 @@ int parse(IrcInfo *info, char *line) {
     }
     else {
       BotCmd *cmd = NULL;
-      IrcMsg *msg = newMsg(line, &cmd);
+      IrcMsg *msg = newMsg(line, info->commands, &cmd);
       
       if (!strcmp(msg->action, "JOIN"))
         status = callback_call(CALLBACK_USRJOIN, (void*)info, msg);        
@@ -190,7 +191,7 @@ int parse(IrcInfo *info, char *line) {
         //make sure who ever is calling the command has permission to do so
         if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master))
           fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
-        else if ((status = command_call(cmd->cmd, (void *)&data, msg->msgTok)) < 0)
+        else if ((status = command_call_r(info->commands, cmd->cmd, (void *)&data, msg->msgTok)) < 0)
           fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
       }
       else 
@@ -228,6 +229,10 @@ void bot_cleanup(IrcInfo *info) {
   if (!info) return;
   close(info->servfds.fd);
   freeaddrinfo(info->res);
+}
+
+void bot_addcommand(IrcInfo *info, char *cmd, int flags, int args, CommandFn fn) {
+  command_reg_r(&info->commands, cmd, flags, args, fn);
 }
 
 /*

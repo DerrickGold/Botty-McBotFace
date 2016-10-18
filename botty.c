@@ -92,39 +92,30 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
     unsigned char loop:2;
   } roulette;
 
-  static roulette game = {.shot = 0, .state = -1, .loop = 0};
+  static roulette game = {.shot = 0, .state = -1};
   CmdData *data = (CmdData *)i;
-  char buf[MAX_MSG_LEN];
-
   game.loop = 0;
+  
   do {
     switch (game.state) {
     default: {
-      //initialize the game here
-      time_t t;
-      srand((unsigned) time(&t));
       //first person to call roulette forces the gun to load
       //and then pulls the trigger on themselves.
       game.loop++;
     }
     case 0:
-      snprintf(buf, MAX_MSG_LEN, "%s%s%s", "\x01",
-               "ACTION loads a round then spins the chamber.", "\x01");
-      botSend(data->info, NULL, buf);
+      ctcpSend(data->info, NULL, "ACTION", "loads a round then spins the chamber.");
       game.shot = (rand() % BULLETS) + 1;
       game.state = 1;
       break;
     case 1:
       if (--game.shot == 0) {
-        snprintf(buf, MAX_MSG_LEN, "%sACTION BANG! %s is dead%s", "\x01", data->msg->nick, "\x01");
-        botSend(data->info, NULL, buf);
+        ctcpSend(data->info, NULL, "ACTION", "BANG! %s is dead.", data->msg->nick);
         //reload the gun once it has been shot
         game.state = 0;
         game.loop++;
-      } else {
-        snprintf(buf, MAX_MSG_LEN, "%sACTION Click. %s is safe%s", "\x01", data->msg->nick, "\x01");
-        botSend(data->info, NULL, buf);
-      }
+      } else
+        ctcpSend(data->info, NULL, "ACTION", "Click. %s is safe.", data->msg->nick);
       break;
     }
   } while (game.loop--);
@@ -132,18 +123,59 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
+  #define MAX_DICE 9
+  
+  CmdData *data = (CmdData *)i;
+  char msg[MAX_MSG_LEN];
+  int numDice = 0, dieMax = 0, n = 0;
+  char delim = '\0';
+  
+  if (!args[1]) {
+    botSend(data->info, NULL, "Missing dice information");
+    return 0;
+  }
+
+  n = sscanf(args[1], "%u%c%u", &numDice, &delim, &dieMax);
+  if (n < 3) {
+    botSend(data->info, NULL, "Invalid roll request: missing parameter");
+    return 0;
+  }
+  else if (numDice > MAX_DICE || numDice < 1) {
+    botSend(data->info, NULL, "Invalid roll request: only 1 through 9 dice may be rolled.");
+    return 0;
+  }
+  else if (dieMax < 2) {
+    botSend(data->info, NULL, "Invalid roll request: dice must have a max greater than 1");
+    return 0;
+  }
+
+  int offset = snprintf(msg, MAX_MSG_LEN, "Rolled: ");
+  for (int i = 0; i < numDice; i++) {
+    int num = (rand() % dieMax) + 1;
+    offset += snprintf(msg + offset, MAX_MSG_LEN, "%d ", num);
+  }
+  snprintf(msg + offset, MAX_MSG_LEN, "for %s", data->msg->nick);
+  ctcpSend(data->info, NULL, "ACTION", msg);
+  return 0;
+}
+
+
 
 
 int main(int argc, char *argv[]) {
+  time_t t;
+  srand((unsigned) time(&t));
+      
   IrcInfo conInfo = {
     .host 		= "CIRCBotHost",
     .nick 		= {"CIrcBot", "CIrcBot2", "CIrcBot3"},
     .port 		= "6667",
     .ident 		= "CIrcBot",
-    .realname = "Botty McBotFace",
-    .master 	= "Derrick",
-    .server 	= "CHANGETHIS",
-    .channel 	= "#CHANGETHIS",
+    .realname	= "Botty McBotFace",
+    .master		= "Derrick",
+    .server		= "CHANGE THIS",
+    .channel	= "#CHANGE THIS",
   };
 
   //hook in some callback functions
@@ -152,13 +184,13 @@ int main(int argc, char *argv[]) {
   callback_set(CALLBACK_MSG, &onMsg);
   callback_set(CALLBACK_USRJOIN, &onUsrJoin);
   callback_set(CALLBACK_USRPART, &onUsrPart);
-
   callback_set(CALLBACK_SERVERCODE, &onServerResp);
   
   //register some commands
   command_reg("say", 0, 2, &botcmd_say);
   command_reg("die", CMDFLAG_MASTER, 1, &botcmd_die);
   command_reg("roulette", 0, 1, &botcmd_roulette);
+  command_reg("roll", 0, 2, &botcmd_roll);
   
   //run the bot
   return run(&conInfo, argc, argv, 0);

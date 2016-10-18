@@ -1,6 +1,7 @@
 #ifndef __IRC_H__
 #define __IRC_H__
 
+#include <stdarg.h>
 #include "globals.h"
 #include "callback.h"
 
@@ -31,6 +32,7 @@ extern int run(IrcInfo *info, int argc, char *argv[], int argstart);
 
 extern int ircSend(int fd, const char *msg);
 
-extern int botSend(IrcInfo *info, char *target, char *msg);
+extern int botSend(IrcInfo *info, char *target, char *msg, ...);
 
+extern int ctcpSend(IrcInfo *info, char *target, char *command, char *msg, ...);
 #endif //__IRC_H__

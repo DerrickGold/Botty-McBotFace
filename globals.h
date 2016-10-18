@@ -8,6 +8,9 @@
 #define CMD_CHAR '~'
 #define PARAM_DELIM ':'
 #define BOT_ARG_DELIM ' '
+#define MSG_FOOTER "\r\n"
+#define CTCP_MARKER "\x01"
+
 
 //number of alternative nicks and attempts the bot should try
 //before giving up registering to the server

@@ -18,10 +18,8 @@ int parse(IrcInfo *info, char *line);
  * to the irc server, and then procedes to send the message.
  */
 int ircSend(int fd, const char *msg) {
-  int n = 0;
-  const char *footer = "\r\n";
-  size_t ilen = strlen(msg), wlen = strlen(footer);
-  char wrapped[MAX_MSG_LEN];
+  static char wrapped[MAX_MSG_LEN];
+  size_t ilen = strlen(msg), wlen = strlen(MSG_FOOTER);
   
   if (ilen + wlen > MAX_MSG_LEN) {
     fprintf(stderr, MSG_LEN_EXCEED, MAX_MSG_LEN);
@@ -30,21 +28,38 @@ int ircSend(int fd, const char *msg) {
   wlen += ilen;
   
   strncpy(wrapped, msg, wlen);
-  strncat(wrapped, footer, wlen);
+  strncat(wrapped, MSG_FOOTER, wlen);
   fprintf(stdout, "\nSENDING: %s", wrapped);
-  n = sendAll(fd, wrapped, wlen);
-
-  return n;
+  return sendAll(fd, wrapped, wlen);
 }
 
 /*
  * Automatically formats a PRIVMSG command for the bot to speak.
  */
-int botSend(IrcInfo *info, char *target, char *msg) {
-  char buf[MAX_MSG_LEN];
+int _botSend(IrcInfo *info, char *target, char *fmt, va_list a) {
+  char fmtBuf[MAX_MSG_LEN], buf[MAX_MSG_LEN];
   if (!target) target = info->channel;
-  snprintf(buf, sizeof(buf), "PRIVMSG %s :%s", target, msg);
+  snprintf(fmtBuf, sizeof(fmtBuf), "PRIVMSG %s :%s", target, fmt);
+  vsnprintf(buf, sizeof(buf), fmtBuf, a); 
   return ircSend(info->servfd, buf);
+}
+
+int botSend(IrcInfo *info, char *target, char *fmt, ...) {
+  int status = 0;
+  va_list args;
+  va_start(args, fmt);
+  status = _botSend(info, target, fmt, args);
+  va_end(args);
+  return status;
+}
+
+int ctcpSend(IrcInfo *info, char *target, char *command, char *msg, ...) {
+  char outbuf[MAX_MSG_LEN];
+  va_list args;
+  va_start(args, msg);
+  vsnprintf(outbuf, MAX_MSG_LEN, msg, args);
+  va_end(args);
+  return botSend(info, target, CTCP_MARKER"%s %s"CTCP_MARKER, command, outbuf);
 }
 
 /*

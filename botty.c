@@ -87,15 +87,16 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
 
   //preserve game state across function calls
   typedef struct roulette {
-    char shot:4;
+    char shot:3;
     char state:2;
-    char loop:2;
+    unsigned char loop:2;
   } roulette;
 
   static roulette game = {.shot = 0, .state = -1, .loop = 0};
   CmdData *data = (CmdData *)i;
   char buf[MAX_MSG_LEN];
 
+  game.loop = 0;
   do {
     switch (game.state) {
     default: {
@@ -104,30 +105,29 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
       srand((unsigned) time(&t));
       //first person to call roulette forces the gun to load
       //and then pulls the trigger on themselves.
-      game.loop = 1;
+      game.loop++;
     }
     case 0:
       snprintf(buf, MAX_MSG_LEN, "%s%s%s", "\x01",
                "ACTION loads a round then spins the chamber.", "\x01");
       botSend(data->info, NULL, buf);
-      game.shot = rand() % BULLETS;
+      game.shot = (rand() % BULLETS) + 1;
       game.state = 1;
       break;
     case 1:
-      game.shot--;
-      if (game.shot < 0) {
+      if (--game.shot == 0) {
         snprintf(buf, MAX_MSG_LEN, "%sACTION BANG! %s is dead%s", "\x01", data->msg->nick, "\x01");
         botSend(data->info, NULL, buf);
         //reload the gun once it has been shot
         game.state = 0;
-        game.loop = 1;
+        game.loop++;
       } else {
         snprintf(buf, MAX_MSG_LEN, "%sACTION Click. %s is safe%s", "\x01", data->msg->nick, "\x01");
         botSend(data->info, NULL, buf);
       }
       break;
     }
-  } while (game.loop-- > 0);
+  } while (game.loop--);
   
   return 0;
 }
@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
     .ident 		= "CIrcBot",
     .realname = "Botty McBotFace",
     .master 	= "Derrick",
-    .server 	= "CHANGE THIS",
+    .server 	= "CHANGETHIS",
     .channel 	= "#CHANGETHIS",
   };
 

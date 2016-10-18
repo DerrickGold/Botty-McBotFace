@@ -1,7 +1,11 @@
 #ifndef __CONNECTION_H__
 #define  __CONNECTION_H__
 
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <netdb.h>
+#include <netinet/in.h>
+
 
 extern int getConnectionInfo(const char *addr, const char *port, struct addrinfo **results);
 

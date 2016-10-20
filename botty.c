@@ -13,8 +13,8 @@
 #include "cmddata.h"
 
 #define BOT_COUNT 1
-#define SERVER "awx.io"
-#define CHANNEL "#bottester"
+#define SERVER "CHANGETHIS"
+#define CHANNEL "#CHANGETHIS"
 
 
 IrcInfo conInfo[2] = {

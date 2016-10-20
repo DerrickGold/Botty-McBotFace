@@ -227,6 +227,9 @@ int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart) {
 
 void bot_cleanup(IrcInfo *info) {
   if (!info) return;
+
+  if (info->commands) command_cleanup_r(&info->commands);
+  info->commands = NULL;    
   close(info->servfds.fd);
   freeaddrinfo(info->res);
 }

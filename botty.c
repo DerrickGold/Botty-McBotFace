@@ -12,31 +12,31 @@
 #include "irc.h"
 #include "cmddata.h"
 
-#define BOT_COUNT 2
-#define SERVER "CHANGE THIS"
-#define CHANNEL "#CHANGE THIS"
+#define BOT_COUNT 1
+#define SERVER "awx.io"
+#define CHANNEL "#bottester"
 
 
-IrcInfo conInfo[BOT_COUNT] = {
+IrcInfo conInfo[2] = {
   {
-    .host 		= "CIRCBotHost",
-    .nick 		= {"DiceBot", "CIrcBot2", "CIrcBot3"},
-    .port 		= "6667",
-    .ident 		= "CIrcBot",
-    .realname	= "Botty McBotFace",
-    .master		= "Derrick",
-    .server		= SERVER,
-    .channel	= CHANNEL,
+    .host     = "CIRCBotHost",
+    .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
+    .port     = "6667",
+    .ident    = "CIrcBot",
+    .realname = "Botty McBotFace",
+    .master   = "Derrick",
+    .server   = SERVER,
+    .channel  = CHANNEL,
   },
   {
-    .host 		= "CIRCBotHost",
-    .nick 		= {"GunBot", "CIrcBot2", "CIrcBot3"},
-    .port 		= "6667",
-    .ident 		= "CIrcBot",
-    .realname	= "Botty McBotFace",
-    .master		= "Derrick",
-    .server		= SERVER,
-    .channel	= CHANNEL,
+    .host     = "CIRCBotHost",
+    .nick     = {"GunBot", "CIrcBot2", "CIrcBot3"},
+    .port     = "6667",
+    .ident    = "CIrcBot",
+    .realname = "Botty McBotFace",
+    .master   = "Derrick",
+    .server   = SERVER,
+    .channel  = CHANNEL,
   }
 };
 

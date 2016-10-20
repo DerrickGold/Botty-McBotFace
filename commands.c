@@ -60,7 +60,6 @@ BotCmd *command_get(char *command) {
 }
 
 
-
 int command_call_r(BotCmd *commands, char *command, void *data, char *args[MAX_BOT_ARGS]) {
 
   BotCmd *curcmd = command_get_r(commands, command);
@@ -76,4 +75,18 @@ int command_call(char *command, void *data, char *args[MAX_BOT_ARGS]) {
   return command_call_r(cmds, command, data, args);
 }
 
+
+void command_cleanup_r(BotCmd **commands) {
+  BotCmd *cur = *commands;
+  BotCmd *next = NULL;
+  while (cur) {
+    next = cur->next;
+    free(cur);
+    cur = next;
+  }
+}
+
+void command_cleanup(void) {
+  if (cmds) command_cleanup_r(&cmds);
+}
 

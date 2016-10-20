@@ -28,4 +28,7 @@ extern BotCmd *command_get(char *command);
 extern int command_call_r(BotCmd *commands, char *command, void *data, char *args[MAX_BOT_ARGS]);
 extern int command_call(char *command, void *data, char *args[MAX_BOT_ARGS]);
 
+extern void command_cleanup_r(BotCmd **commands);
+extern void command_cleanup(void);
+
 #endif //__COMMANDS_H__

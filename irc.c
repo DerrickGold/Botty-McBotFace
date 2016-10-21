@@ -13,7 +13,7 @@
 #include "connection.h"
 #include "cmddata.h"
 
-int parse(BotInfo *info, char *line);
+int parse(BotInfo *bot, char *line);
 
 /*
  * Adds the required trailing '\r\n' to any message sent
@@ -38,54 +38,68 @@ int ircSend(int fd, const char *msg) {
 /*
  * Automatically formats a PRIVMSG command for the bot to speak.
  */
-int _botSend(BotInfo *info, char *target, char *fmt, va_list a) {
+int _botSend(BotInfo *bot, char *target, char *fmt, va_list a) {
   char fmtBuf[MAX_MSG_LEN], buf[MAX_MSG_LEN];
-  if (!target) target = info->channel;
+  if (!target) target = bot->info->channel;
   snprintf(fmtBuf, sizeof(fmtBuf), "PRIVMSG %s :%s", target, fmt);
   vsnprintf(buf, sizeof(buf), fmtBuf, a); 
-  return ircSend(info->servfds.fd, buf);
+  return ircSend(bot->servfds.fd, buf);
 }
 
-int botSend(BotInfo *info, char *target, char *fmt, ...) {
+int botSend(BotInfo *bot, char *target, char *fmt, ...) {
   int status = 0;
   va_list args;
   va_start(args, fmt);
-  status = _botSend(info, target, fmt, args);
+  status = _botSend(bot, target, fmt, args);
   va_end(args);
   return status;
 }
 
-int ctcpSend(BotInfo *info, char *target, char *command, char *msg, ...) {
+int ctcpSend(BotInfo *bot, char *target, char *command, char *msg, ...) {
   char outbuf[MAX_MSG_LEN];
   va_list args;
   va_start(args, msg);
   vsnprintf(outbuf, MAX_MSG_LEN, msg, args);
   va_end(args);
-  return botSend(info, target, CTCP_MARKER"%s %s"CTCP_MARKER, command, outbuf);
+  return botSend(bot, target, CTCP_MARKER"%s %s"CTCP_MARKER, command, outbuf);
 }
 
 /*
  * Default actions for handling various server responses such as nick collisions
  */
-static int defaultServActions(BotInfo *info, IrcMsg *msg, char *line) {
+static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   //if nick is already registered, try a new one
   if (!strncmp(msg->action, REG_ERR_CODE, strlen(REG_ERR_CODE))) {
-    if (info->nickAttempt < NICK_ATTEMPTS) info->nickAttempt++;
+    if (bot->nickAttempt < NICK_ATTEMPTS) bot->nickAttempt++;
     else {
       fprintf(stderr, "Exhuasted nick attempts, please configure a unique nick\n");
       return -1;
     }
-    fprintf(stderr, "Nick is already in use, attempting to use: %s\n", info->nick[info->nickAttempt]);
+    fprintf(stderr, "Nick is already in use, attempting to use: %s\n", bot->nick[bot->nickAttempt]);
     //then attempt registration again
-    info->state = CONSTATE_CONNECTED;
-    //return parse(info, line);
+    bot->state = CONSTATE_CONNECTED;
+    //return parse(bot, line);
     return 0;
   }
   //otherwise, nick is not in use
   else if (!strncmp(msg->action, REG_SUC_CODE, strlen(REG_SUC_CODE))) {
-    info->state = CONSTATE_REGISTERED;
+    bot->state = CONSTATE_REGISTERED;
   }
-  
+  //store all current users in the channel
+  else if (!strncmp(msg->action, NAME_REPLY, strlen(NAME_REPLY))) {
+    char *start = msg->msgTok[1], *next = start, *end = start + strlen(start) - 1;
+    while (start < end) {
+      while (*next != BOT_ARG_DELIM && next < end) next++;
+      *next = '\0';
+      bot_regName(bot, start);
+      fprintf(stdout, "Registered nick: %s\n", start);
+      if (next < end) {
+        *next = BOT_ARG_DELIM;
+        next++;
+      }
+      start = next;
+    }
+  }
   return 0;
 }
 
@@ -94,23 +108,39 @@ static int defaultServActions(BotInfo *info, IrcMsg *msg, char *line) {
  * Parse out any server responses that may need to be attended to
  * and pass them into the appropriate callbacks.
  */
-static int parseServer(BotInfo *info, char *line) {
+static int parseServer(BotInfo *bot, char *line) {
   char buf[MAX_MSG_LEN];
-  snprintf(buf, sizeof(buf), ":%s", info->server);
+  snprintf(buf, sizeof(buf), ":%s", bot->info->server);
   //not a server response
   if (strncmp(line, buf, strlen(buf))) return 0;
   //is a server response
   strncpy(buf, line, MAX_MSG_LEN);
   IrcMsg *msg = servMsg(buf);
-  int status = defaultServActions(info, msg, line);
+  int status = defaultServActions(bot, msg, line);
   if (status) {
     free(msg);
     return status;
   }
   
-  callback_call(CALLBACK_SERVERCODE, (void *)info, msg);
+  callback_call(CALLBACK_SERVERCODE, (void *)bot, msg);
   free(msg);
   return 0;
+}
+
+int userJoined(BotInfo *bot, IrcMsg *msg) {
+  bot_regName(bot, msg->nick);
+  return callback_call(CALLBACK_USRJOIN, (void *)bot, msg);        
+}
+
+int userLeft(BotInfo *bot, IrcMsg *msg) {
+  bot_rmName(bot, msg->nick);
+  return callback_call(CALLBACK_USRPART, (void *)bot, msg);
+}
+
+int userNickChange(BotInfo *bot, IrcMsg *msg) {
+  bot_rmName(bot, msg->nick);
+  bot_regName(bot, msg->msg);
+  return callback_call(CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 
 /*
@@ -118,7 +148,7 @@ static int parseServer(BotInfo *info, char *line) {
  * invokes callbacks depending on the message type and
  * current state of the connection.
  */
-int parse(BotInfo *info, char *line) {
+int parse(BotInfo *bot, char *line) {
   if (!line) return 0;
   
   int status = 0;
@@ -130,72 +160,73 @@ int parse(BotInfo *info, char *line) {
   if (!strncmp(line, "PING", strlen("PING"))) {
     char *pong = line + strlen("PING") + 1;
     snprintf(sysBuf, sizeof(sysBuf), "PONG %s", pong);
-    ircSend(info->servfds.fd, sysBuf);
+    ircSend(bot->servfds.fd, sysBuf);
     return 0;
   }
   
-  if ((status = parseServer(info, line)) < 0) return -1;
+  if ((status = parseServer(bot, line)) < 0) return -1;
   else if (status) return 0;
   
-  switch (info->state) {
+  switch (bot->state) {
   case CONSTATE_NONE:
-    if (!info->commands) info->commands = command_global();
+    if (!bot->commands) bot->commands = command_global();
     //initialize data here
     space = strtok_r(line, " ", &space_off);
     if (space) {
       //grab new server name if we've been redirected
-      memcpy(info->server, space+1, strlen(space) - 1);
-      printf("given server: %s\n", info->server);
+      memcpy(bot->info->server, space+1, strlen(space) - 1);
+      printf("given server: %s\n", bot->info->server);
     }
-    callback_call(CALLBACK_CONNECT, (void*)info, NULL);
-    info->state = CONSTATE_CONNECTED;
+    callback_call(CALLBACK_CONNECT, (void*)bot, NULL);
+    bot->state = CONSTATE_CONNECTED;
     break;
     
   case CONSTATE_CONNECTED:
     //register the bot
-    snprintf(sysBuf, sizeof(sysBuf), "NICK %s", info->nick[info->nickAttempt]);
-    ircSend(info->servfds.fd, sysBuf);
-    snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", info->ident, info->host, info->realname);
-    ircSend(info->servfds.fd, sysBuf);
+    snprintf(sysBuf, sizeof(sysBuf), "NICK %s", bot->nick[bot->nickAttempt]);
+    ircSend(bot->servfds.fd, sysBuf);
+    snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", bot->ident, bot->host, bot->realname);
+    ircSend(bot->servfds.fd, sysBuf);
     //go to listening state to wait for registration confirmation
-    info->state = CONSTATE_LISTENING;
+    bot->state = CONSTATE_LISTENING;
     break;
 
   case CONSTATE_REGISTERED:
-    snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", info->channel);
-    ircSend(info->servfds.fd, sysBuf);
-    info->state = CONSTATE_JOINED;
+    snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", bot->info->channel);
+    ircSend(bot->servfds.fd, sysBuf);
+    bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
-    callback_call(CALLBACK_JOIN, (void*)info, NULL);
-    info->state = CONSTATE_LISTENING;
+    callback_call(CALLBACK_JOIN, (void*)bot, NULL);
+    bot->state = CONSTATE_LISTENING;
     break;
   default:
   case CONSTATE_LISTENING:
-    snprintf(sysBuf, sizeof(sysBuf), ":%s", info->nick[info->nickAttempt]);
+    snprintf(sysBuf, sizeof(sysBuf), ":%s", bot->nick[bot->nickAttempt]);
     if (!strncmp(line, sysBuf, strlen(sysBuf))) {
       //filter out messages that the bot says itself
       break;
     }
     else {
       BotCmd *cmd = NULL;
-      IrcMsg *msg = newMsg(line, info->commands, &cmd);
+      IrcMsg *msg = newMsg(line, bot->commands, &cmd);
       
       if (!strcmp(msg->action, "JOIN"))
-        status = callback_call(CALLBACK_USRJOIN, (void*)info, msg);        
-      else if (!strcpy(msg->action, "PART"))
-        status = callback_call(CALLBACK_USRPART, (void*)info, msg);
+        status = userJoined(bot, msg);
+      else if (!strcmp(msg->action, "PART") || !strcmp(msg->action, "QUIT"))
+        status = userLeft(bot, msg);
+      else if (!strcmp(msg->action, "NICK"))
+        status = userNickChange(bot, msg);
       else if (cmd) {
-        CmdData data = { .info = info, .msg = msg };
-        
+        CmdData data = { .bot = bot, .msg = msg };
         //make sure who ever is calling the command has permission to do so
-        if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, info->master))
-          fprintf(stderr, "%s is not %s\n", msg->nick, info->master);
-        else if ((status = command_call_r(info->commands, cmd->cmd, (void *)&data, msg->msgTok)) < 0)
+        if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, bot->master))
+          fprintf(stderr, "%s is not %s\n", msg->nick, bot->master);
+        else if ((status = command_call_r(bot->commands, cmd->cmd, (void *)&data, msg->msgTok)) < 0)
           fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
       }
       else 
-        callback_call(CALLBACK_MSG, (void*)info, msg);
+        callback_call(CALLBACK_MSG, (void*)bot, msg);
 
       free(msg);
     } 
@@ -204,59 +235,60 @@ int parse(BotInfo *info, char *line) {
   return status;
 }
 
-int bot_connect(BotInfo *info, int argc, char *argv[], int argstart) {
-  if (!info) return -1;
+int bot_connect(BotInfo *bot, int argc, char *argv[], int argstart) {
+  if (!bot) return -1;
   
-  info->servfds.fd = clientInit(info->server, info->port, &info->res);
-  if (info->servfds.fd < 0) exit(1);
-  info->state = CONSTATE_NONE;
-  info->servfds.events = POLLIN | POLLPRI | POLLOUT | POLLWRBAND;
+  bot->servfds.fd = clientInit(bot->info->server, bot->info->port, &bot->res);
+  if (bot->servfds.fd < 0) exit(1);
+  bot->state = CONSTATE_NONE;
+  bot->servfds.events = POLLIN | POLLPRI | POLLOUT | POLLWRBAND;
   
   int n = strlen(SERVER_PREFIX);
-  if (strncmp(SERVER_PREFIX, info->server, n)) {
-    int servLen = strlen(info->server);
+  if (strncmp(SERVER_PREFIX, bot->info->server, n)) {
+    int servLen = strlen(bot->info->server);
     if (servLen + n < MAX_SERV_LEN) {
-      memmove(info->server + n, info->server, servLen);
-      memcpy(info->server, SERVER_PREFIX, n);
-      printf("NEW SERVER NAME: %s\n", info->server);
+      memmove(bot->info->server + n, bot->info->server, servLen);
+      memcpy(bot->info->server, SERVER_PREFIX, n);
+      printf("NEW SERVER NAME: %s\n", bot->info->server);
     }
   }  
 
   return 0;
 }
 
-void bot_cleanup(BotInfo *info) {
-  if (!info) return;
+void bot_cleanup(BotInfo *bot) {
+  if (!bot) return;
 
-  if (info->commands) command_cleanup_r(&info->commands);
-  info->commands = NULL;    
-  close(info->servfds.fd);
-  freeaddrinfo(info->res);
+  bot_purgeNames(bot);
+  if (bot->commands) command_cleanup_r(&bot->commands);
+  bot->commands = NULL; 
+  close(bot->servfds.fd);
+  freeaddrinfo(bot->res);
 }
 
-void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn) {
-  command_reg_r(&info->commands, cmd, flags, args, fn);
+void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) {
+  command_reg_r(&bot->commands, cmd, flags, args, fn);
 }
 
 /*
  * Run the bot! The bot will connect to the server and start
  * parsing replies.
  */
-int bot_run(BotInfo *info) {
+int bot_run(BotInfo *bot) {
   int n, ret;
   //process all input first before receiving more
-  if (info->line) {
-    if ((ret = poll(&info->servfds, 1, POLL_TIMEOUT_MS)) && info->servfds.revents & POLLOUT) {
-      if ((n = parse(info, info->line)) < 0) return n;
-      info->line = strtok_r(NULL, "\r\n", &info->line_off);
+  if (bot->line) {
+    if ((ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS)) && bot->servfds.revents & POLLOUT) {
+      if ((n = parse(bot, bot->line)) < 0) return n;
+      bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
     }
     return 0;
   }    
   
-  info->line_off = NULL;
-  memset(info->recvbuf, 0, sizeof(info->recvbuf));
-  if ((ret = poll(&info->servfds, 1, POLL_TIMEOUT_MS)) && info->servfds.revents & POLLIN) {
-    n = recv(info->servfds.fd, info->recvbuf, sizeof(info->recvbuf), 0);    
+  bot->line_off = NULL;
+  memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
+  if ((ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS)) && bot->servfds.revents & POLLIN) {
+    n = recv(bot->servfds.fd, bot->recvbuf, sizeof(bot->recvbuf), 0);    
     if (!n) {
       printf("Remote closed connection\n");
       return -2;
@@ -268,6 +300,71 @@ int bot_run(BotInfo *info) {
   }
   
   //parse replies one line at a time
-  info->line = strtok_r(info->recvbuf, "\r\n", &info->line_off);
+  bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
   return 0;
 }
+
+/*
+ * Keep a list of all nicks in the channel
+ */
+void bot_regName(BotInfo *bot, char *nick) {
+  NickList *curNick;
+  NickList *newNick = calloc(1, sizeof(NickList));
+  if (!newNick) {
+    perror("NickList Alloc Error: ");
+    exit(1);
+  }
+  
+  strncpy(newNick->nick, nick, MAX_NICK_LEN);
+  if (!bot->names) {
+    //first name
+    bot->names = newNick;
+    return;
+  }
+  
+  curNick = bot->names;
+  while (curNick->next) curNick = curNick->next;
+  curNick->next = newNick;
+}
+
+void bot_rmName(BotInfo *bot, char *nick) {
+  NickList *curNick, *lastNick;
+
+  curNick = bot->names;
+
+  while (curNick && strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
+    lastNick = curNick;
+    curNick = curNick->next;
+  }
+
+  //make sure the node we stopped on is the right one
+  if (!strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
+    if (bot->names == curNick) bot->names = curNick->next;
+    else lastNick->next = curNick->next;
+    free(curNick);
+  } else
+    fprintf(stderr, "Failed to remove \'%s\' from nick list, does not exist\n", nick);
+
+}
+
+void bot_purgeNames(BotInfo *bot) {
+  NickList *curNick = bot->names, *next;
+  while (curNick) {
+    next = curNick->next;
+    free(next);
+    curNick = next;
+  }
+  bot->names = NULL;
+}
+
+
+void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data)) {
+  NickList *curNick = bot->names;
+  while (curNick) {
+    if (fn) fn(curNick, d);
+    curNick = curNick->next;
+  }
+}
+
+
+

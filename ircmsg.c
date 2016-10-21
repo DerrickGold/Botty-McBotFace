@@ -34,9 +34,13 @@ IrcMsg *newMsg(char *input, BotCmd *list, BotCmd **cmd) {
   //get the channel or user the message originated from
   tok = strtok_r(NULL, " ", &tok_off);
   if (!tok) return msg;
-  strncpy(msg->channel, tok, MAX_CHAN_LEN);
-
-  if (!tok_off || tok_off + 1 >= end) return msg;
+  //if the token starts with the delimiter at this point, then
+  //there is no channel parameter, just a message
+  if (*tok != PARAM_DELIM) {
+    strncpy(msg->channel, tok, MAX_CHAN_LEN);
+    if (!tok_off || tok_off + 1 >= end) return msg;
+  } else
+    tok_off = tok;
   
   //finally save the rest of the message
   strncpy(msg->msg, tok_off+1, MAX_MSG_LEN);

@@ -13,30 +13,30 @@
 #include "cmddata.h"
 
 #define BOT_COUNT 1
-#define SERVER "CHANGETHIS"
-#define CHANNEL "#CHANGETHIS"
 
+
+IrcInfo server = {
+  .port     = "44067",
+  .server   = "servbox.duckdns.org",
+  .channel  = "#bottester"
+};
 
 BotInfo conInfo[2] = {
   {
+    .info			= &server,
     .host     = "CIRCBotHost",
     .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
-    .port     = "6667",
     .ident    = "CIrcBot",
     .realname = "Botty McBotFace",
     .master   = "Derrick",
-    .server   = SERVER,
-    .channel  = CHANNEL,
   },
   {
+    .info			= &server,
     .host     = "CIRCBotHost",
     .nick     = {"GunBot", "CIrcBot2", "CIrcBot3"},
-    .port     = "6667",
     .ident    = "CIrcBot",
     .realname = "Botty McBotFace",
     .master   = "Derrick",
-    .server   = SERVER,
-    .channel  = CHANNEL,
   }
 };
 
@@ -74,6 +74,12 @@ int onUsrPart(void *data, IrcMsg *msg) {
   return 0;
 }
 
+int onNickChange(void *data, IrcMsg *msg) {
+  if (!data || !msg) return -1;
+  BotInfo *i = (BotInfo *)data;
+  botSend(i, NULL, "I see what you did there %s... AKA %s!", msg->msg, msg->nick);
+  return 0;
+}
 
 int onServerResp(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
@@ -99,15 +105,15 @@ int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
     printf("ARG %d: %s\n", i, args[i]);
   }
 
-  botSend(data->info, NULL, args[1]);
+  botSend(data->bot, NULL, args[1]);
   return 0;
 }
 
 int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
   printf("COMMAND RECEIVED: %s\n", args[0]);
   CmdData *data = (CmdData *)i;
-  botSend(data->info, NULL, "Seeya!");
-  ircSend(data->info->servfds.fd, "QUIT :leaving");
+  botSend(data->bot, NULL, "Seeya!");
+  ircSend(data->bot->servfds.fd, "QUIT :leaving");
   return -1;
 }
 
@@ -134,21 +140,21 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
       game.loop++;
     }
     case 0:
-      ctcpSend(data->info, NULL, "ACTION", "loads a round then spins the chamber.");
+      ctcpSend(data->bot, NULL, "ACTION", "loads a round then spins the chamber.");
       game.shot = (rand() % BULLETS + 1) + 1;
-      game.doQuote = (game.shot >= (BULLETS - 1));
+      game.doQuote = (game.shot >= BULLETS);
       game.state = 1;
       break;
     case 1:
       if (--game.shot == 0) {
-        ctcpSend(data->info, NULL, "ACTION", "BANG! %s is dead.", data->msg->nick);
+        ctcpSend(data->bot, NULL, "ACTION", "BANG! %s is dead.", data->msg->nick);
         //reload the gun once it has been shot
         game.state = 0;
         game.loop++;
       } else
-        ctcpSend(data->info, NULL, "ACTION", "Click. %s is safe.", data->msg->nick);
+        ctcpSend(data->bot, NULL, "ACTION", "Click. %s is safe.", data->msg->nick);
 
-      if (game.doQuote && game.shot == 2) botSend(data->info, NULL, QUOTE);
+      if (game.doQuote && game.shot == 2) botSend(data->bot, NULL, QUOTE);
       break;
     }
   } while (game.loop--);
@@ -165,21 +171,21 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
   char delim = '\0';
   
   if (!args[1]) {
-    botSend(data->info, NULL, "Missing dice information");
+    botSend(data->bot, NULL, "Missing dice information");
     return 0;
   }
 
   n = sscanf(args[1], "%u%c%u", &numDice, &delim, &dieMax);
   if (n < 3) {
-    botSend(data->info, NULL, "Invalid roll request: missing parameter");
+    botSend(data->bot, NULL, "Invalid roll request: missing parameter");
     return 0;
   }
   else if (numDice > MAX_DICE || numDice < 1) {
-    botSend(data->info, NULL, "Invalid roll request: only 1 through 9 dice may be rolled.");
+    botSend(data->bot, NULL, "Invalid roll request: only 1 through 9 dice may be rolled.");
     return 0;
   }
   else if (dieMax < 2) {
-    botSend(data->info, NULL, "Invalid roll request: dice must have a max greater than 1");
+    botSend(data->bot, NULL, "Invalid roll request: dice must have a max greater than 1");
     return 0;
   }
 
@@ -189,10 +195,22 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
     offset += snprintf(msg + offset, MAX_MSG_LEN, "%d ", num);
   }
   snprintf(msg + offset, MAX_MSG_LEN, "for %s", data->msg->nick);
-  ctcpSend(data->info, NULL, "ACTION", msg);
+  ctcpSend(data->bot, NULL, "ACTION", msg);
   return 0;
 }
 
+
+void printNick(NickList *n, void *data) {
+  fprintf(stdout, "NICKDUMP: %s\n", n->nick);
+}
+
+
+
+int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)i;
+  bot_foreachName(data->bot, NULL, &printNick);
+  return 0;
+}
 
 /*
  * Single bot with all functions
@@ -205,6 +223,7 @@ int singlebot(int argc, char *argv[]) {
   bot_addcommand(&conInfo[0], "die", CMDFLAG_MASTER, 1, &botcmd_die);
   bot_addcommand(&conInfo[0],"roll", 0, 2, &botcmd_roll);
   bot_addcommand(&conInfo[0], "roulette", 0, 1, &botcmd_roulette);
+  bot_addcommand(&conInfo[0], "nicks", 0, 1, &botcmd_dumpnames);
   
   bot_connect(&conInfo[0], argc, argv, 0);
   while (((status = bot_run(&conInfo[0])) >= 0)) {}
@@ -254,7 +273,8 @@ int main(int argc, char *argv[]) {
   callback_set(CALLBACK_USRJOIN, &onUsrJoin);
   callback_set(CALLBACK_USRPART, &onUsrPart);
   callback_set(CALLBACK_SERVERCODE, &onServerResp);
-
+  callback_set(CALLBACK_USRNICKCHANGE, &onNickChange);
+  
   if (BOT_COUNT < 2) return singlebot(argc, argv);
   return multibot(argc, argv);
 }

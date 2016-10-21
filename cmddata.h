@@ -5,7 +5,7 @@
 #include "irc.h"
 
 typedef struct CmdData {
-  BotInfo *info;
+  BotInfo *bot;
   IrcMsg *msg;
 } CmdData;
 

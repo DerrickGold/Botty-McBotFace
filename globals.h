@@ -24,9 +24,8 @@
 #define MAX_BOT_ARGS 8
 #define MAX_PARAMETERS 15
 
-
-#define REG_ERR_CODE "433"
 #define REG_SUC_CODE "001"
-
+#define NAME_REPLY "353"
+#define REG_ERR_CODE "433"
 
 #endif //__GLOBALS_H__

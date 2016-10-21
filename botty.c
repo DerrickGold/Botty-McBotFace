@@ -16,14 +16,14 @@
 
 
 IrcInfo server = {
-  .port     = "44067",
-  .server   = "servbox.duckdns.org",
-  .channel  = "#bottester"
+  .port     = "6667",
+  .server   = "CHANGETHIS",
+  .channel  = "#CHANGETHIS"
 };
 
 BotInfo conInfo[2] = {
   {
-    .info			= &server,
+    .info     = &server,
     .host     = "CIRCBotHost",
     .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
     .ident    = "CIrcBot",
@@ -31,7 +31,7 @@ BotInfo conInfo[2] = {
     .master   = "Derrick",
   },
   {
-    .info			= &server,
+    .info     = &server,
     .host     = "CIRCBotHost",
     .nick     = {"GunBot", "CIrcBot2", "CIrcBot3"},
     .ident    = "CIrcBot",

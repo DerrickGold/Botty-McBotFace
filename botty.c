@@ -114,18 +114,18 @@ int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
 /* Hacky roulette game implementation */
 int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
   #define BULLETS 6
-
+  #define QUOTE "You've got to ask yourself one question: \"do I feel lucky?\" Well do you punk?"
   //preserve game state across function calls
   typedef struct roulette {
-    char shot:3;
     char state:2;
+    unsigned char shot:3;
     unsigned char loop:2;
+    unsigned char doQuote: 1;
   } roulette;
 
   static roulette game = {.shot = 0, .state = -1};
   CmdData *data = (CmdData *)i;
   game.loop = 0;
-  
   do {
     switch (game.state) {
     default: {
@@ -135,7 +135,8 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
     }
     case 0:
       ctcpSend(data->info, NULL, "ACTION", "loads a round then spins the chamber.");
-      game.shot = (rand() % BULLETS) + 1;
+      game.shot = (rand() % BULLETS + 1) + 1;
+      game.doQuote = (game.shot >= (BULLETS - 1));
       game.state = 1;
       break;
     case 1:
@@ -146,6 +147,8 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
         game.loop++;
       } else
         ctcpSend(data->info, NULL, "ACTION", "Click. %s is safe.", data->msg->nick);
+
+      if (game.doQuote && game.shot == 2) botSend(data->info, NULL, QUOTE);
       break;
     }
   } while (game.loop--);

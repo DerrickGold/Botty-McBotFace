@@ -13,7 +13,7 @@
 #include "connection.h"
 #include "cmddata.h"
 
-int parse(IrcInfo *info, char *line);
+int parse(BotInfo *info, char *line);
 
 /*
  * Adds the required trailing '\r\n' to any message sent
@@ -38,7 +38,7 @@ int ircSend(int fd, const char *msg) {
 /*
  * Automatically formats a PRIVMSG command for the bot to speak.
  */
-int _botSend(IrcInfo *info, char *target, char *fmt, va_list a) {
+int _botSend(BotInfo *info, char *target, char *fmt, va_list a) {
   char fmtBuf[MAX_MSG_LEN], buf[MAX_MSG_LEN];
   if (!target) target = info->channel;
   snprintf(fmtBuf, sizeof(fmtBuf), "PRIVMSG %s :%s", target, fmt);
@@ -46,7 +46,7 @@ int _botSend(IrcInfo *info, char *target, char *fmt, va_list a) {
   return ircSend(info->servfds.fd, buf);
 }
 
-int botSend(IrcInfo *info, char *target, char *fmt, ...) {
+int botSend(BotInfo *info, char *target, char *fmt, ...) {
   int status = 0;
   va_list args;
   va_start(args, fmt);
@@ -55,7 +55,7 @@ int botSend(IrcInfo *info, char *target, char *fmt, ...) {
   return status;
 }
 
-int ctcpSend(IrcInfo *info, char *target, char *command, char *msg, ...) {
+int ctcpSend(BotInfo *info, char *target, char *command, char *msg, ...) {
   char outbuf[MAX_MSG_LEN];
   va_list args;
   va_start(args, msg);
@@ -67,7 +67,7 @@ int ctcpSend(IrcInfo *info, char *target, char *command, char *msg, ...) {
 /*
  * Default actions for handling various server responses such as nick collisions
  */
-static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
+static int defaultServActions(BotInfo *info, IrcMsg *msg, char *line) {
   //if nick is already registered, try a new one
   if (!strncmp(msg->action, REG_ERR_CODE, strlen(REG_ERR_CODE))) {
     if (info->nickAttempt < NICK_ATTEMPTS) info->nickAttempt++;
@@ -94,7 +94,7 @@ static int defaultServActions(IrcInfo *info, IrcMsg *msg, char *line) {
  * Parse out any server responses that may need to be attended to
  * and pass them into the appropriate callbacks.
  */
-static int parseServer(IrcInfo *info, char *line) {
+static int parseServer(BotInfo *info, char *line) {
   char buf[MAX_MSG_LEN];
   snprintf(buf, sizeof(buf), ":%s", info->server);
   //not a server response
@@ -118,7 +118,7 @@ static int parseServer(IrcInfo *info, char *line) {
  * invokes callbacks depending on the message type and
  * current state of the connection.
  */
-int parse(IrcInfo *info, char *line) {
+int parse(BotInfo *info, char *line) {
   if (!line) return 0;
   
   int status = 0;
@@ -204,7 +204,7 @@ int parse(IrcInfo *info, char *line) {
   return status;
 }
 
-int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart) {
+int bot_connect(BotInfo *info, int argc, char *argv[], int argstart) {
   if (!info) return -1;
   
   info->servfds.fd = clientInit(info->server, info->port, &info->res);
@@ -225,7 +225,7 @@ int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart) {
   return 0;
 }
 
-void bot_cleanup(IrcInfo *info) {
+void bot_cleanup(BotInfo *info) {
   if (!info) return;
 
   if (info->commands) command_cleanup_r(&info->commands);
@@ -234,7 +234,7 @@ void bot_cleanup(IrcInfo *info) {
   freeaddrinfo(info->res);
 }
 
-void bot_addcommand(IrcInfo *info, char *cmd, int flags, int args, CommandFn fn) {
+void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn) {
   command_reg_r(&info->commands, cmd, flags, args, fn);
 }
 
@@ -242,7 +242,7 @@ void bot_addcommand(IrcInfo *info, char *cmd, int flags, int args, CommandFn fn)
  * Run the bot! The bot will connect to the server and start
  * parsing replies.
  */
-int bot_run(IrcInfo *info) {
+int bot_run(BotInfo *info) {
   int n, ret;
   //process all input first before receiving more
   if (info->line) {

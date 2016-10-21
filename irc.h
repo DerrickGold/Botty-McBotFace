@@ -14,7 +14,7 @@ typedef enum {
 } ConState;
 
 
-typedef struct IrcInfo {
+typedef struct BotInfo {
   //user config values
   char host[256];
   char nick[NICK_ATTEMPTS][MAX_NICK_LEN];
@@ -34,19 +34,19 @@ typedef struct IrcInfo {
   int nickAttempt;
 
   BotCmd *commands;
-} IrcInfo;
+} BotInfo;
 
-extern void bot_addcommand(IrcInfo *info, char *cmd, int flags, int args, CommandFn fn);
+extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
 
-extern int bot_connect(IrcInfo *info, int argc, char *argv[], int argstart);
+extern int bot_connect(BotInfo *info, int argc, char *argv[], int argstart);
 
-extern void bot_cleanup(IrcInfo *info);
+extern void bot_cleanup(BotInfo *info);
 
-extern int bot_run(IrcInfo *info);
+extern int bot_run(BotInfo *info);
 
 extern int ircSend(int fd, const char *msg);
 
-extern int botSend(IrcInfo *info, char *target, char *msg, ...);
+extern int botSend(BotInfo *info, char *target, char *msg, ...);
 
-extern int ctcpSend(IrcInfo *info, char *target, char *command, char *msg, ...);
+extern int ctcpSend(BotInfo *info, char *target, char *command, char *msg, ...);
 #endif //__IRC_H__

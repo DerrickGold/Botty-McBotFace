@@ -17,7 +17,7 @@
 #define CHANNEL "#CHANGETHIS"
 
 
-IrcInfo conInfo[2] = {
+BotInfo conInfo[2] = {
   {
     .host     = "CIRCBotHost",
     .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
@@ -51,7 +51,7 @@ int onConnect(void *data, IrcMsg *msg) {
 }
 
 int onJoin(void *data, IrcMsg *msg) {
-  botSend((IrcInfo *)data, NULL, "Hello, World!");
+  botSend((BotInfo *)data, NULL, "Hello, World!");
   return 0;
 }
 

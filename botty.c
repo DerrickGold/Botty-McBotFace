@@ -97,20 +97,37 @@ int onServerResp(void *data, IrcMsg *msg) {
 /*
  * Some commands that the users can call.
  */
+int botcmd_info(void *i, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)i;
+  //if user private messages the bot this command, return the message
+  //in a private message
+  char *target = data->msg->channel;
+  if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
+    target = data->msg->nick;
+  
+  botSend(data->bot, target, INFO_MSG);
+  return 0;
+}
+
+int botcmd_source(void *i, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)i;
+  //if user private messages the bot this command, return the message
+  //in a private message
+  char *target = data->msg->channel;
+  if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
+    target = data->msg->nick;
+  
+  botSend(data->bot, target, SRC_MSG);
+  return 0;
+}
+
 int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  printf("COMMAND RECEIVED: %s:\n", args[0]);
-  for (int i = 0; i < MAX_BOT_ARGS; i++) {
-    if (!args[i]) break;
-    printf("ARG %d: %s\n", i, args[i]);
-  }
-
   botSend(data->bot, NULL, args[1]);
   return 0;
 }
 
 int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
-  printf("COMMAND RECEIVED: %s\n", args[0]);
   CmdData *data = (CmdData *)i;
   botSend(data->bot, NULL, "Seeya!");
   ircSend(data->bot->servfds.fd, "QUIT :leaving");
@@ -204,8 +221,6 @@ void printNick(NickList *n, void *data) {
   fprintf(stdout, "NICKDUMP: %s\n", n->nick);
 }
 
-
-
 int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   bot_foreachName(data->bot, NULL, &printNick);
@@ -218,9 +233,7 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
 int singlebot(int argc, char *argv[]) {
   int status = 0;
   
-  //register some commands
-  bot_addcommand(&conInfo[0], "say", 0, 2, &botcmd_say);
-  bot_addcommand(&conInfo[0], "die", CMDFLAG_MASTER, 1, &botcmd_die);
+  //register some extra commands
   bot_addcommand(&conInfo[0],"roll", 0, 2, &botcmd_roll);
   bot_addcommand(&conInfo[0], "roulette", 0, 1, &botcmd_roulette);
   bot_addcommand(&conInfo[0], "nicks", 0, 1, &botcmd_dumpnames);
@@ -243,12 +256,8 @@ int multibot(int argc, char *argv[]) {
   bot_addcommand(&conInfo[1], "roulette", 0, 1, &botcmd_roulette);
 
   int status[BOT_COUNT] = {0}, exitsum = 0;
-  for (int i = 0; i < BOT_COUNT; i++) {
-    //default commands
-    bot_addcommand(&conInfo[i], "say", 0, 2, &botcmd_say);
-    bot_addcommand(&conInfo[i], "die", CMDFLAG_MASTER, 1, &botcmd_die);
+  for (int i = 0; i < BOT_COUNT; i++)
     bot_connect(&conInfo[i], argc, argv, 0);
-  }
   
   while (exitsum < BOT_COUNT) {
     for (int i = 0; i < BOT_COUNT; i++) {
@@ -274,7 +283,15 @@ int main(int argc, char *argv[]) {
   callback_set(CALLBACK_USRPART, &onUsrPart);
   callback_set(CALLBACK_SERVERCODE, &onServerResp);
   callback_set(CALLBACK_USRNICKCHANGE, &onNickChange);
-  
+
+  //register the default commands for all bots
+  for (int i = 0; i < BOT_COUNT; i++) {
+    bot_addcommand(&conInfo[i], "info", 0, 1, &botcmd_info);
+    bot_addcommand(&conInfo[i], "source", 0, 1, &botcmd_source);  
+    bot_addcommand(&conInfo[i], "say", 0, 2, &botcmd_say);
+    bot_addcommand(&conInfo[i], "die", CMDFLAG_MASTER, 1, &botcmd_die);
+  }
+
   if (BOT_COUNT < 2) return singlebot(argc, argv);
   return multibot(argc, argv);
 }

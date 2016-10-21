@@ -1,6 +1,12 @@
 #ifndef __GLOBALS_H__
 #define __GLOBALS_H__
 
+#define INFO_MSG \
+  "Created by Derrick Gold. Compiled at "__TIME__", "__DATE__
+
+#define SRC_MSG \
+  "Source Code: git clone https://github.com/DerrickGold/Botty-McBotFace.git"
+
 #define MSG_LEN_EXCEED \
   "Message length exceeds %d byte limit. Message splitting not supported yet\n"
 

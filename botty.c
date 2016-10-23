@@ -17,8 +17,8 @@
 
 IrcInfo server = {
   .port     = "6667",
-  .server   = "awx.io",
-  .channel  = "#bottester"
+  .server   = "CHANGETHIS",
+  .channel  = "#CHANGETHIS"
 };
 
 BotInfo conInfo[2] = {

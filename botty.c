@@ -17,8 +17,8 @@
 
 IrcInfo server = {
   .port     = "6667",
-  .server   = "CHANGETHIS",
-  .channel  = "#CHANGETHIS"
+  .server   = "awx.io",
+  .channel  = "#bottester"
 };
 
 BotInfo conInfo[2] = {
@@ -272,9 +272,11 @@ int multibot(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
+  int status = 0;
   time_t t;
   srand((unsigned) time(&t));
 
+  irc_init();
   //hook in some callback functions
   callback_set(CALLBACK_CONNECT, &onConnect);
   callback_set(CALLBACK_JOIN, &onJoin);
@@ -292,7 +294,11 @@ int main(int argc, char *argv[]) {
     bot_addcommand(&conInfo[i], "die", CMDFLAG_MASTER, 1, &botcmd_die);
   }
 
-  if (BOT_COUNT < 2) return singlebot(argc, argv);
-  return multibot(argc, argv);
+
+  if (BOT_COUNT < 2) status = singlebot(argc, argv);
+  else status = multibot(argc, argv);
+  
+  irc_cleanup();
+  return status;
 }
 

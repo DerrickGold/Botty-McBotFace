@@ -13,6 +13,20 @@
 #include "connection.h"
 #include "cmddata.h"
 
+HashTable *IrcApiActions = NULL;
+
+const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN] = {
+  "NOP", "DIE", "WHO", "KICK", "NICK", "MODE", "INFO", "KILL",
+  "PING", "TIME", "JOIN", "AWAY", "MOTD", "PONG", "OPER",
+  "PART", "ISON", "LIST", "USER", "QUIT", "ADMIN", "TRACE",
+  "NAMES", "TOPIC", "LINKS", "ERROR", "WHOIS", "STATS",
+  "USERS", "SQUIT", "REHASH", "INVITE", "WHOWAS", "LUSERS",
+  "SUMMON", "SQUERY", "CONNECT", "SERVICE", "WALLOPS", "RESTART",
+  "VERSION", "SERVLIST", "USERHOST"
+};
+
+static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
+
 int parse(BotInfo *bot, char *line);
 
 /*
@@ -124,7 +138,7 @@ static int parseServer(BotInfo *bot, char *line) {
   
   callback_call(CALLBACK_SERVERCODE, (void *)bot, msg);
   free(msg);
-  return 0;
+  return 1;
 }
 
 int userJoined(BotInfo *bot, IrcMsg *msg) {
@@ -151,7 +165,7 @@ int userNickChange(BotInfo *bot, IrcMsg *msg) {
 int parse(BotInfo *bot, char *line) {
   if (!line) return 0;
   
-  int status = 0;
+  int servStat = 0;
   char sysBuf[MAX_MSG_LEN];
   char *space = NULL, *space_off = NULL;
   fprintf(stdout, "SERVER: %s\n", line);
@@ -164,8 +178,7 @@ int parse(BotInfo *bot, char *line) {
     return 0;
   }
   
-  if ((status = parseServer(bot, line)) < 0) return -1;
-  else if (status) return 0;
+  if ((servStat = parseServer(bot, line)) < 0) return servStat;
   
   switch (bot->state) {
   case CONSTATE_NONE:
@@ -202,6 +215,9 @@ int parse(BotInfo *bot, char *line) {
     break;
   default:
   case CONSTATE_LISTENING:
+    //filter out server messages
+    if (servStat) break;
+    
     snprintf(sysBuf, sizeof(sysBuf), ":%s", bot->nick[bot->nickAttempt]);
     if (!strncmp(line, sysBuf, strlen(sysBuf))) {
       //filter out messages that the bot says itself
@@ -210,30 +226,68 @@ int parse(BotInfo *bot, char *line) {
     else {
       BotCmd *cmd = NULL;
       IrcMsg *msg = newMsg(line, bot->commands, &cmd);
+      IRC_API_Actions action = IRC_ACTION_NOP;
+      HashEntry *a = HashTable_find(IrcApiActions, msg->action);
       
-      if (!strcmp(msg->action, "JOIN"))
-        status = userJoined(bot, msg);
-      else if (!strcmp(msg->action, "PART") || !strcmp(msg->action, "QUIT"))
-        status = userLeft(bot, msg);
-      else if (!strcmp(msg->action, "NICK"))
-        status = userNickChange(bot, msg);
-      else if (cmd) {
+      if (cmd) {
         CmdData data = { .bot = bot, .msg = msg };
         //make sure who ever is calling the command has permission to do so
         if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, bot->master))
           fprintf(stderr, "%s is not %s\n", msg->nick, bot->master);
-        else if ((status = command_call_r(bot->commands, cmd->cmd, (void *)&data, msg->msgTok)) < 0)
+        else if ((servStat = command_call_r(bot->commands, cmd->cmd, (void *)&data, msg->msgTok)) < 0)
           fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
       }
-      else 
+      else if (a) {
+        if (a->data) action = *(IRC_API_Actions*)a->data;
+
+        switch(action) {
+        default: break;
+        case IRC_ACTION_JOIN:
+          servStat = userJoined(bot, msg);
+          break;
+        case IRC_ACTION_QUIT:
+        case IRC_ACTION_PART:
+          servStat = userLeft(bot, msg);
+          break;
+        case IRC_ACTION_NICK:
+          servStat = userNickChange(bot, msg);
+          break;
+        }
+      }
+      else
         callback_call(CALLBACK_MSG, (void*)bot, msg);
 
       free(msg);
     } 
     break;
   }
-  return status;
+  return servStat;
 }
+
+/*
+ * initialize the hash table used for looking up api calls
+ */
+int irc_init(void) {
+  IrcApiActions = HashTable_init(ACTION_HASH_SIZE);
+  if (!IrcApiActions) {
+    fprintf(stderr, "Error initializing IRC API hash\n");
+    return -1;
+  }
+
+  for (int i = 0; i < API_ACTION_COUNT; i++) {
+    IrcApiActionValues[i] = (IRC_API_Actions) i;
+    HashTable_add(IrcApiActions,
+                  HashEntry_create((char *)IrcApiActionText[i], (void *)&IrcApiActionValues[i]));
+  }
+
+  return 0;
+}
+
+void irc_cleanup(void) {
+  HashTable_destroy(IrcApiActions);
+  IrcApiActions = NULL;
+}
+
 
 int bot_connect(BotInfo *bot, int argc, char *argv[], int argstart) {
   if (!bot) return -1;

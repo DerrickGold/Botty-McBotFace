@@ -48,6 +48,10 @@ typedef struct BotInfo {
   void *data;
 } BotInfo;
 
+extern int irc_init(void);
+
+extern void irc_cleanup(void);
+
 extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
 
 extern int bot_connect(BotInfo *info, int argc, char *argv[], int argstart);

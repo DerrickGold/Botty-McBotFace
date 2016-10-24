@@ -230,7 +230,7 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
 /*
  * Single bot with all functions
  */
-int singlebot(int argc, char *argv[]) {
+int singlebot(void) {
   int status = 0;
   
   //register some extra commands
@@ -238,7 +238,7 @@ int singlebot(int argc, char *argv[]) {
   bot_addcommand(&conInfo[0], "roulette", 0, 1, &botcmd_roulette);
   bot_addcommand(&conInfo[0], "nicks", 0, 1, &botcmd_dumpnames);
   
-  bot_connect(&conInfo[0], argc, argv, 0);
+  bot_connect(&conInfo[0]);
   while (((status = bot_run(&conInfo[0])) >= 0)) {}
   bot_cleanup(&conInfo[0]);
   
@@ -248,7 +248,7 @@ int singlebot(int argc, char *argv[]) {
 /*
  * Using multiple bots with different functions.
  */
-int multibot(int argc, char *argv[]) {
+int multibot(void) {
   //register some commands
   //bot 1 has roll
   bot_addcommand(&conInfo[0],"roll", 0, 2, &botcmd_roll);
@@ -257,7 +257,7 @@ int multibot(int argc, char *argv[]) {
 
   int status[BOT_COUNT] = {0}, exitsum = 0;
   for (int i = 0; i < BOT_COUNT; i++)
-    bot_connect(&conInfo[i], argc, argv, 0);
+    bot_connect(&conInfo[i]);
   
   while (exitsum < BOT_COUNT) {
     for (int i = 0; i < BOT_COUNT; i++) {
@@ -288,15 +288,15 @@ int main(int argc, char *argv[]) {
 
   //register the default commands for all bots
   for (int i = 0; i < BOT_COUNT; i++) {
+    if (bot_init(&conInfo[i], argc, argv, 0)) return -1;
     bot_addcommand(&conInfo[i], "info", 0, 1, &botcmd_info);
     bot_addcommand(&conInfo[i], "source", 0, 1, &botcmd_source);  
     bot_addcommand(&conInfo[i], "say", 0, 2, &botcmd_say);
     bot_addcommand(&conInfo[i], "die", CMDFLAG_MASTER, 1, &botcmd_die);
   }
 
-
-  if (BOT_COUNT < 2) status = singlebot(argc, argv);
-  else status = multibot(argc, argv);
+  if (BOT_COUNT < 2) status = singlebot();
+  else status = multibot();
   
   irc_cleanup();
   return status;

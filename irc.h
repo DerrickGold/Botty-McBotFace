@@ -41,7 +41,7 @@ typedef struct BotInfo {
   ConState state;
   int nickAttempt;
 
-  BotCmd *commands;
+  HashTable *commands;
   NickList *names;
 
   //some pointer the user can use
@@ -52,11 +52,13 @@ extern int irc_init(void);
 
 extern void irc_cleanup(void);
 
-extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
+extern int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
-extern int bot_connect(BotInfo *info, int argc, char *argv[], int argstart);
+extern int bot_connect(BotInfo *info);
 
 extern void bot_cleanup(BotInfo *info);
+
+extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
 
 extern int bot_run(BotInfo *info);
 

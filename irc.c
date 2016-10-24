@@ -182,7 +182,6 @@ int parse(BotInfo *bot, char *line) {
   
   switch (bot->state) {
   case CONSTATE_NONE:
-    if (!bot->commands) bot->commands = command_global();
     //initialize data here
     space = strtok_r(line, " ", &space_off);
     if (space) {
@@ -234,7 +233,7 @@ int parse(BotInfo *bot, char *line) {
         //make sure who ever is calling the command has permission to do so
         if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, bot->master))
           fprintf(stderr, "%s is not %s\n", msg->nick, bot->master);
-        else if ((servStat = command_call_r(bot->commands, cmd->cmd, (void *)&data, msg->msgTok)) < 0)
+        else if ((servStat = command_call_r(cmd, (void *)&data, msg->msgTok)) < 0)
           fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
       }
       else if (a) {
@@ -288,8 +287,18 @@ void irc_cleanup(void) {
   IrcApiActions = NULL;
 }
 
+int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
+  if (!bot) return -1;
 
-int bot_connect(BotInfo *bot, int argc, char *argv[], int argstart) {
+  bot->commands = HashTable_init(COMMAND_HASH_SIZE);
+  if (!bot->commands) {
+    fprintf(stderr, "Error allocating command hash for bot\n");
+    return -1;
+  }
+  return 0;
+}
+
+int bot_connect(BotInfo *bot) {
   if (!bot) return -1;
   
   bot->servfds.fd = clientInit(bot->info->server, bot->info->port, &bot->res);
@@ -314,14 +323,14 @@ void bot_cleanup(BotInfo *bot) {
   if (!bot) return;
 
   bot_purgeNames(bot);
-  if (bot->commands) command_cleanup_r(&bot->commands);
+  if (bot->commands) command_cleanup(bot->commands);
   bot->commands = NULL; 
   close(bot->servfds.fd);
   freeaddrinfo(bot->res);
 }
 
 void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) {
-  command_reg_r(&bot->commands, cmd, flags, args, fn);
+  command_reg(bot->commands, cmd, flags, args, fn);
 }
 
 /*

@@ -8,27 +8,22 @@ typedef enum {
 } CommandFlags;
 
 typedef struct BotCmd {
+  char *cmd;
   int flags;
-  char cmd[MAX_CMD_LEN];
   int args;
   int (*fn)(void *, char *a[MAX_BOT_ARGS]);
-  struct BotCmd *next;
 } BotCmd;
 
 typedef int (*CommandFn)(void *, char *a[MAX_BOT_ARGS]);
 
-extern BotCmd *command_global(void);
+extern int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandFn fn);
 
-extern void command_reg_r(BotCmd **commands, char *cmdtag, int flags, int args, CommandFn fn);
-extern void command_reg(char *cmdtag, int flags, int args, CommandFn fn);
+extern BotCmd *command_get(HashTable *cmdTable, char *command);
 
-extern BotCmd *command_get_r(BotCmd *commands, char *command);
-extern BotCmd *command_get(char *command);
+extern int command_call_r(BotCmd *cmd, void *data, char *args[MAX_BOT_ARGS]);
 
-extern int command_call_r(BotCmd *commands, char *command, void *data, char *args[MAX_BOT_ARGS]);
-extern int command_call(char *command, void *data, char *args[MAX_BOT_ARGS]);
+extern int command_call(HashTable *cmdTable, char *command, void *data, char *args[MAX_BOT_ARGS]);
 
-extern void command_cleanup_r(BotCmd **commands);
-extern void command_cleanup(void);
+extern void command_cleanup(HashTable *cmdTable);
 
 #endif //__COMMANDS_H__

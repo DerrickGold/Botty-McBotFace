@@ -6,7 +6,7 @@
 #include "ircmsg.h"
 
 
-IrcMsg *newMsg(char *input, BotCmd *list, BotCmd **cmd) {
+IrcMsg *newMsg(char *input, HashTable *cmdTable, BotCmd **cmd) {
   IrcMsg *msg = NULL;
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
@@ -55,7 +55,7 @@ IrcMsg *newMsg(char *input, BotCmd *list, BotCmd **cmd) {
       msg->msgTok[i] = tok;
     
       if (i == 0) {
-        *cmd = command_get_r(list, msg->msgTok[0]);
+        *cmd = command_get(cmdTable, msg->msgTok[0]);
         if (*cmd)  argCount = (*cmd)->args;
       }
       

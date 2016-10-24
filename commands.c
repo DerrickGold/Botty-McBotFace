@@ -5,88 +5,66 @@
 #include "globals.h"
 #include "commands.h"
 
-static BotCmd *cmds = NULL;
-
-BotCmd *command_global(void) {
-  return cmds;
-}
-
 /*
  * Register a command for the bot to use
  */
-void command_reg_r(BotCmd **commands, char *cmdtag, int flags, int args, CommandFn fn) {
-  if (!commands) return;
+int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandFn fn) {
+  if (!cmdTable || !cmdtag || !fn) {
+    fprintf(stderr, "Command registration failed:null table, tag, or function given\n");
+    return -1;
+  }
 
-  BotCmd *curCmd;
   BotCmd *newcmd = calloc(1, sizeof(BotCmd));
   if (!newcmd) {
     perror("Command Alloc Error: ");
-    exit(1);
-  }
-  
-  strncpy(newcmd->cmd, cmdtag, MAX_CMD_LEN);
-  newcmd->args = args;
-  newcmd->fn = fn;
-  newcmd->flags = flags;
-  
-  if (!*commands) {
-    //first command
-    *commands = newcmd;
-    return;
-  }
-  
-  curCmd = *commands;
-  while (curCmd->next) curCmd = curCmd->next;
-  curCmd->next = newcmd;
-}
-
-
-void command_reg(char *cmdtag, int flags, int args, CommandFn fn) {
-  return command_reg_r(&cmds, cmdtag, flags, args, fn);
-}
-
-
-BotCmd *command_get_r(BotCmd *commands, char *command) {
-  BotCmd *curcmd = commands;
-  while (curcmd && strncmp(curcmd->cmd, command, MAX_CMD_LEN))
-    curcmd = curcmd->next;
-
-  return curcmd;
-}
-
-
-BotCmd *command_get(char *command) {
-  return command_get_r(cmds, command);
-}
-
-
-int command_call_r(BotCmd *commands, char *command, void *data, char *args[MAX_BOT_ARGS]) {
-
-  BotCmd *curcmd = command_get_r(commands, command);
-  if (!curcmd) {
-    fprintf(stderr, "Command (%s) is not a registered command\n", command);
     return -1;
   }
   
-  return curcmd->fn(data, args);
-}
-
-int command_call(char *command, void *data, char *args[MAX_BOT_ARGS]) {
-  return command_call_r(cmds, command, data, args);
-}
-
-
-void command_cleanup_r(BotCmd **commands) {
-  BotCmd *cur = *commands;
-  BotCmd *next = NULL;
-  while (cur) {
-    next = cur->next;
-    free(cur);
-    cur = next;
+  newcmd->args = args;
+  newcmd->fn = fn;
+  newcmd->flags = flags;
+  HashEntry *e = HashEntry_create(cmdtag, newcmd);
+  if (!e) {
+    free(newcmd);
+    return -2;
   }
+  newcmd->cmd = e->key;
+  if (!HashTable_add(cmdTable, e)) {
+    fprintf(stderr, "Error adding command %s to hash\n", cmdtag);
+    return -3;
+  }
+  return 0;
 }
 
-void command_cleanup(void) {
-  if (cmds) command_cleanup_r(&cmds);
+BotCmd *command_get(HashTable *cmdTable, char *command) {
+  HashEntry *e = HashTable_find(cmdTable, command);
+  if (e) return (BotCmd *)e->data;
+  return NULL;
+}
+
+int command_call_r(BotCmd *cmd, void *data, char *args[MAX_BOT_ARGS]) {
+if (!cmd) {
+    fprintf(stderr, "Command (%s) is not a registered command\n", cmd->cmd);
+    return -1;
+  }
+  return cmd->fn(data, args);
+}
+
+int command_call(HashTable *cmdTable, char *command, void *data, char *args[MAX_BOT_ARGS]) {
+  BotCmd *cmd = command_get(cmdTable, command);
+  return command_call_r(cmd, data, args);
+}
+
+static int cleanCmd(HashEntry *entry, void *data) {
+  if (entry->data) {
+    free(entry->data);
+    entry->data = NULL;
+  }
+  return 0;
+}
+
+void command_cleanup(HashTable *cmdTable) {
+  HashTable_forEach(cmdTable, NULL, &cleanCmd);
+  HashTable_destroy(cmdTable);
 }
 

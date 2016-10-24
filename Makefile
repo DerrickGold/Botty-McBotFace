@@ -1,6 +1,7 @@
 SHELL=/bin/bash
 CC=gcc
 CFLAGS=-Wall -g -std=gnu99
+LDLIBS=-lm
 
 .PHONY: all clean
 

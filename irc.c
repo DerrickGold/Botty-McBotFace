@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <poll.h>
 
+#include "builtin.h"
 #include "irc.h"
 #include "ircmsg.h"
 #include "commands.h"
@@ -295,6 +296,8 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
     fprintf(stderr, "Error allocating command hash for bot\n");
     return -1;
   }
+  //initialize the built in commands
+  botcmd_builtin(bot);
   return 0;
 }
 

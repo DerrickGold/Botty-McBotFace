@@ -95,44 +95,15 @@ int onServerResp(void *data, IrcMsg *msg) {
 }
  
 /*
- * Some commands that the users can call.
+ * Some fun commands that aren't necessary, but illustrate 
+ * how to use this bot api.
  */
-int botcmd_info(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-  //if user private messages the bot this command, return the message
-  //in a private message
-  char *target = data->msg->channel;
-  if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
-    target = data->msg->nick;
-  
-  botSend(data->bot, target, INFO_MSG);
-  return 0;
-}
-
-int botcmd_source(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-  //if user private messages the bot this command, return the message
-  //in a private message
-  char *target = data->msg->channel;
-  if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
-    target = data->msg->nick;
-  
-  botSend(data->bot, target, SRC_MSG);
-  return 0;
-}
-
 int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   botSend(data->bot, NULL, args[1]);
   return 0;
 }
 
-int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-  botSend(data->bot, NULL, "Seeya!");
-  ircSend(data->bot->servfds.fd, "QUIT :leaving");
-  return -1;
-}
 
 /* Hacky roulette game implementation */
 int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
@@ -217,7 +188,7 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
 }
 
 
-void printNick(NickList *n, void *data) {
+static void printNick(NickList *n, void *data) {
   fprintf(stdout, "NICKDUMP: %s\n", n->nick);
 }
 
@@ -267,7 +238,10 @@ int multibot(void) {
       }
     }
   }
-  for (int i = 0; i < BOT_COUNT; i++) bot_cleanup(&conInfo[i]);
+  
+  for (int i = 0; i < BOT_COUNT; i++)
+    bot_cleanup(&conInfo[i]);
+  
   return 0;
 }
 
@@ -289,10 +263,7 @@ int main(int argc, char *argv[]) {
   //register the default commands for all bots
   for (int i = 0; i < BOT_COUNT; i++) {
     if (bot_init(&conInfo[i], argc, argv, 0)) return -1;
-    bot_addcommand(&conInfo[i], "info", 0, 1, &botcmd_info);
-    bot_addcommand(&conInfo[i], "source", 0, 1, &botcmd_source);  
     bot_addcommand(&conInfo[i], "say", 0, 2, &botcmd_say);
-    bot_addcommand(&conInfo[i], "die", CMDFLAG_MASTER, 1, &botcmd_die);
   }
 
   if (BOT_COUNT < 2) status = singlebot();

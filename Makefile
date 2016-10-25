@@ -10,8 +10,10 @@ LDLIBS+= $(BOTTYDIR)/botty.a
 
 .PHONY: all clean
 
-all: samplebot
+all: samplebot multibot
+
 samplebot: samplebot.o 
-samplebot.o: samplebot.c
+multibot: multibot.o
+
 clean:
-	$(RM) *.o samplebot
+	$(RM) *.o samplebot multibot

@@ -1,5 +1,5 @@
 # Botty-McBotFace
-A simple IRC Bot in C
+A simple IRC Bot/Bot library in C
 
 ## Building
 A sample bot configuration has been included in `samplebot.c`. Once this bot
@@ -36,3 +36,7 @@ The sample bot has some extra commands to demonstrate the command functionaility
 - `say <text>` :Make the bot say <text> to the channel its in
 - `roll <num dice>d<max dice roll>` :Get the bot to roll x number of dice with y max
 - `roulette` :Start/participate in a game of roulette
+
+### MultiBot
+This library allows for multiple bots to be configured and run without blocking each other. Take a look at `multibot.c` for an example of the multibot feature in action.
+

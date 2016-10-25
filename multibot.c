@@ -1,5 +1,5 @@
 /*
- * A sample IRC bot using libbotty.
+ * Multiple non-blocking sample bots using libbotty.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,17 +8,32 @@
 
 #include "botapi.h"
 
-BotInfo conInfo = {
-  .info     = &(IrcInfo) {
-    .port     = "6667",
-    .server   = "CHANGETHIS",
-    .channel  = "#CHANGETHIS"
+#define BOT_COUNT 2
+
+IrcInfo server = {
+  .port     = "6667",
+  .server   = "CHANGETHIS",
+  .channel  = "#CHANGETHIS"
+};
+
+//Set up two bots for the same server and channel
+BotInfo conInfo[2] = {
+  {
+    .info     = &server,
+    .host     = "CIRCBotHost",
+    .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
+    .ident    = "CIrcBot",
+    .realname = "Botty McBotFace",
+    .master   = "Derrick",
   },
-  .host     = "CIRCBotHost",
-  .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
-  .ident    = "CIrcBot",
-  .realname = "Botty McBotFace",
-  .master   = "Derrick",
+  {
+    .info     = &server,
+    .host     = "CIRCBotHost",
+    .nick     = {"GunBot", "CIrcBot2", "CIrcBot3"},
+    .ident    = "CIrcBot",
+    .realname = "Botty McBotFace",
+    .master   = "Derrick",
+  }
 };
 
 
@@ -181,7 +196,7 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
 
 
 int main(int argc, char *argv[]) {
-  int status = 0;
+  int status[BOT_COUNT], exitsum = 0;
   time_t t;
   srand((unsigned) time(&t));
 
@@ -194,19 +209,37 @@ int main(int argc, char *argv[]) {
   botty_setGlobalCallback(CALLBACK_SERVERCODE, &onServerResp);
   botty_setGlobalCallback(CALLBACK_USRNICKCHANGE, &onNickChange);
 
-  if (botty_init(&conInfo, argc, argv, 0))
-    return -1;
+  //initiate and register the default commands for all bots
+  for (int i = 0; i < BOT_COUNT; i++) {
+    if (botty_init(&conInfo[i], argc, argv, 0)) return -1;
+    botty_addCommand(&conInfo[i], "say", 0, 2, &botcmd_say);
+  }
+
+  //register specific commands to specific bots
+  //bot 1 has roll
+  botty_addCommand(&conInfo[0],"roll", 0, 2, &botcmd_roll);
+  //bot 2 has roulette
+  botty_addCommand(&conInfo[1], "roulette", 0, 1, &botcmd_roulette);
+
+  //connect the bots
+  for (int i = 0; i < BOT_COUNT; i++)
+    botty_connect(&conInfo[i]);
   
-  //register some extra commands
-  botty_addCommand(&conInfo, "say", 0, 2, &botcmd_say);
-  botty_addCommand(&conInfo,"roll", 0, 2, &botcmd_roll);
-  botty_addCommand(&conInfo, "roulette", 0, 1, &botcmd_roulette);
-  botty_addCommand(&conInfo, "nicks", 0, 1, &botcmd_dumpnames);
+  while (exitsum < BOT_COUNT) {
+    //Process all bots. We only want this loop to exit
+    //when both bots have died
+    for (int i = 0; i < BOT_COUNT; i++) {
+      if (status[i] >= 0) {
+        status[i] = botty_process(&conInfo[i]);
+        exitsum += status[i] < 0;
+      }
+    }
+  }
+
+  //and now the cleanup
+  for (int i = 0; i < BOT_COUNT; i++)
+    botty_cleanup(&conInfo[i]);
   
-  botty_connect(&conInfo);
-  while (((status = botty_process(&conInfo)) >= 0)) {}
-  botty_cleanup(&conInfo);
-  
-  return status;
+  return 0;
 }
 

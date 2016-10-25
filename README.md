@@ -3,10 +3,8 @@ A simple IRC Bot in C
 
 ## Building
 A sample bot configuration has been included in `samplebot.c`. Once this bot
-is configured via the IrcInfo and BotInfo structs at the top, simply run `make`
-to build.
-
-A `botty.a` static library will be created for reuse in other bots.
+is configured via the IrcInfo and BotInfo structs at the top, simply run `build.sh`
+to build both libbotty and the samplebot.
 
 ## Features
 This bot has a few notable features. See `samplebot.c` for implementation details.

@@ -8,7 +8,6 @@
 
 #include "builtin.h"
 #include "globals.h"
-#include "commands.h"
 
 /*
  * Default commands that should be available for 

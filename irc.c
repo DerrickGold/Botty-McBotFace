@@ -268,6 +268,8 @@ int parse(BotInfo *bot, char *line) {
  * initialize the hash table used for looking up api calls
  */
 int irc_init(void) {
+  if (IrcApiActions) return 0;
+  
   IrcApiActions = HashTable_init(ACTION_HASH_SIZE);
   if (!IrcApiActions) {
     fprintf(stderr, "Error initializing IRC API hash\n");

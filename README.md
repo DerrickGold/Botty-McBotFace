@@ -2,10 +2,39 @@
 A simple IRC Bot in C
 
 ## Building
-
-First configure the bot in `botty.c` by providing a valid channel, server, and port. Then type in
-the terminal:
-
-`make`
-
+A sample bot configuration has been included in `samplebot.c`. Once this bot
+is configured via the IrcInfo and BotInfo structs at the top, simply run `make`
 to build.
+
+A `botty.a` static library will be created for reuse in other bots.
+
+## Features
+This bot has a few notable features. See `samplebot.c` for implementation details.
+
+### Callbacks
+First there are global callback events that are possible to tap into without having to parse text or mess around with the implementation themselves. These events include:
+
+- When the bot connects to a server
+- When the bot joins a channel
+- When the bot receives a general message
+- When another user joins
+- When another user parts/quits
+- When another user changes their nick
+- When the bot receives a server message (such as API calls)
+
+### Commands
+Secondly, it is possible to register commands to the bot. These commands are up to MAX_CMD_LEN in length (currently 9 characters), and can have up to MAX_BOT_ARGS (currently 8) arguments passed to them. Commands are invoked by the first word of a message
+written to the channel including CMD_CHAR ('~') as the first character of the word, with any arguments given separated by BOT_ARG_DELIM (a space).
+
+The bot has a few built in commands with some basic info, and the functionality to shut the bot down:
+
+- `help` :provides a list of the commands registered to the bot
+- `info` :provides creator info, and build date and time
+- `source` :provides the git command for cloning this repository
+- `die` :shuts the bot down
+
+The sample bot has some extra commands to demonstrate the command functionaility, these include:
+
+- `say <text>` :Make the bot say <text> to the channel its in
+- `roll <num dice>d<max dice roll>` :Get the bot to roll x number of dice with y max
+- `roulette` :Start/participate in a game of roulette

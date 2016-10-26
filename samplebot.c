@@ -37,6 +37,7 @@ BotInfo conInfo = {
 static HashTable *mailBoxes = NULL;
 
 typedef struct Mail {
+  time_t sent;
   char from[MAX_NICK_LEN];
   char msg[MAX_MSG_LEN];
   struct Mail *next;
@@ -62,7 +63,7 @@ static void mailNotify(BotInfo *bot, char *nick) {
      char *notStatus = getNotified(nick);
      if (!notStatus) return;
      if (!*notStatus) {
-         botty_send(bot, NULL, "%s: You have %d unread messages. Use '~mail' to view them.", nick, left);
+         botty_send(bot, NULL, "%s: You have %d unread message(s). Use '~mail' to view them.", nick, left);
          *notStatus = 1;
      }
   }
@@ -142,20 +143,20 @@ int botcmd_msg(void *i, char *args[MAX_BOT_ARGS]) {
   char *to = args[1], *msg = args[2];
   if (!to || !msg) {
     botty_send(data->bot, NULL,
-               "%s, malformed mail command, must contain a destination nick and a message.",
+               "%s: Malformed mail command, must contain a destination nick and a message.",
                data->msg->nick);
     return 0;
   }
   
   if (saveMail(to, data->msg->nick, msg)) {
     botty_send(data->bot, NULL,
-               "%s, there was an error saving your message, contact bot owner for assistance.",
+               "%s: There was an error saving your message, contact bot owner for assistance.",
                data->msg->nick);
     return 0;
   }
 
   botty_send(data->bot, NULL,
-             "%s, your message will be delivered to %s upon their return.",
+             "%s: Your message will be delivered to %s upon their return.",
              data->msg->nick, to);
   return 0;
 }
@@ -392,6 +393,7 @@ int saveMail(char *to, char *from, char *message) {
     fprintf(stderr, "error allocating new mail for nick %s\n", to);
     return -1;
   }
+  time(&newMail->sent);
   strncpy(newMail->from, from, MAX_NICK_LEN);
   strncpy(newMail->msg, message, MAX_MSG_LEN);
 
@@ -451,7 +453,13 @@ void readMail(BotInfo *bot, char *nick) {
   MailBox *box = (MailBox *)user->data;  
   Mail *message = box->messages;
   box->messages = message->next;
-  botty_send(bot, NULL, "From %s: %s", message->from, message->msg);
+
+  //get sent time
+  char buff[20];
+  struct tm * timeinfo = localtime (&message->sent);
+  strftime(buff, sizeof(buff), "%b %d @ %H:%M", timeinfo);
+  
+  botty_send(bot, NULL, "%s: [%s <%s>] %s", nick, buff, message->from, message->msg);
   free(message);
   box->count--;
 }

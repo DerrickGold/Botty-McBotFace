@@ -11,8 +11,8 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6667",
-    .server   = "CHANGETHIS",
-    .channel  = "#CHANGETHIS"
+    .server   = "awx.io",
+    .channel  = "#bottester"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
@@ -186,13 +186,13 @@ int main(int argc, char *argv[]) {
   srand((unsigned) time(&t));
 
   //hook in some callback functions
-  botty_setGlobalCallback(CALLBACK_CONNECT, &onConnect);
-  botty_setGlobalCallback(CALLBACK_JOIN, &onJoin);
-  botty_setGlobalCallback(CALLBACK_MSG, &onMsg);
-  botty_setGlobalCallback(CALLBACK_USRJOIN, &onUsrJoin);
-  botty_setGlobalCallback(CALLBACK_USRPART, &onUsrPart);
-  botty_setGlobalCallback(CALLBACK_SERVERCODE, &onServerResp);
-  botty_setGlobalCallback(CALLBACK_USRNICKCHANGE, &onNickChange);
+  botty_setCallback(&conInfo, CALLBACK_CONNECT, &onConnect);
+  botty_setCallback(&conInfo, CALLBACK_JOIN, &onJoin);
+  botty_setCallback(&conInfo, CALLBACK_MSG, &onMsg);
+  botty_setCallback(&conInfo, CALLBACK_USRJOIN, &onUsrJoin);
+  botty_setCallback(&conInfo, CALLBACK_USRPART, &onUsrPart);
+  botty_setCallback(&conInfo, CALLBACK_SERVERCODE, &onServerResp);
+  botty_setCallback(&conInfo, CALLBACK_USRNICKCHANGE, &onNickChange);
 
   if (botty_init(&conInfo, argc, argv, 0))
     return -1;

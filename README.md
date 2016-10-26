@@ -10,7 +10,7 @@ to build both libbotty and the samplebot.
 This bot has a few notable features. See `samplebot.c` for implementation details.
 
 ### Callbacks
-First there are global callback events that are possible to tap into without having to parse text or mess around with the implementation themselves. These events include:
+First there are callback events that the bot will trigger which can be easily hooked into without having to parse text or muck around in the code implementation. These events include:
 
 - When the bot connects to a server
 - When the bot joins a channel

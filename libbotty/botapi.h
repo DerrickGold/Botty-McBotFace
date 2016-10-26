@@ -17,8 +17,8 @@ extern void botty_cleanup(BotInfo *bot);
   bot_addcommand(bot, cmd, flags, args, fn)
 
 //returns void
-#define botty_setGlobalCallback(id, fn) \
-  callback_set(id, fn)
+#define botty_setCallback(bot, id, fn)          \
+  bot_setCallback(bot, id, fn);
 
 //returns int, negative value indicates error
 #define botty_connect(bot) \

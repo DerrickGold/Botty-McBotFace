@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include "globals.h"
 #include "commands.h"
+#include "callback.h"
 
 typedef enum {
   CONSTATE_NONE,
@@ -26,6 +27,7 @@ typedef struct IrcInfo {
 
 typedef struct BotInfo {
   //user config values
+  int id;
   IrcInfo *info;
   char host[256];
   char nick[NICK_ATTEMPTS][MAX_NICK_LEN];
@@ -41,9 +43,10 @@ typedef struct BotInfo {
   ConState state;
   int nickAttempt;
 
+  Callback cb[CALLBACK_COUNT];
   HashTable *commands;
   NickList *names;
-
+  
   //some pointer the user can use
   void *data;
 } BotInfo;
@@ -57,6 +60,8 @@ extern int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 extern int bot_connect(BotInfo *info);
 
 extern void bot_cleanup(BotInfo *info);
+
+extern void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
 
 extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
 

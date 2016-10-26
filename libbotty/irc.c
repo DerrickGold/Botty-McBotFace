@@ -137,25 +137,25 @@ static int parseServer(BotInfo *bot, char *line) {
     return status;
   }
   
-  callback_call(CALLBACK_SERVERCODE, (void *)bot, msg);
+  callback_call_r(bot->cb, CALLBACK_SERVERCODE, (void *)bot, msg);
   free(msg);
   return 1;
 }
 
 int userJoined(BotInfo *bot, IrcMsg *msg) {
   bot_regName(bot, msg->nick);
-  return callback_call(CALLBACK_USRJOIN, (void *)bot, msg);        
+  return callback_call_r(bot->cb, CALLBACK_USRJOIN, (void *)bot, msg);        
 }
 
 int userLeft(BotInfo *bot, IrcMsg *msg) {
   bot_rmName(bot, msg->nick);
-  return callback_call(CALLBACK_USRPART, (void *)bot, msg);
+  return callback_call_r(bot->cb, CALLBACK_USRPART, (void *)bot, msg);
 }
 
 int userNickChange(BotInfo *bot, IrcMsg *msg) {
   bot_rmName(bot, msg->nick);
   bot_regName(bot, msg->msg);
-  return callback_call(CALLBACK_USRNICKCHANGE, (void *)bot, msg);
+  return callback_call_r(bot->cb, CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 
 /*
@@ -190,7 +190,7 @@ int parse(BotInfo *bot, char *line) {
       memcpy(bot->info->server, space+1, strlen(space) - 1);
       printf("given server: %s\n", bot->info->server);
     }
-    callback_call(CALLBACK_CONNECT, (void*)bot, NULL);
+    callback_call_r(bot->cb, CALLBACK_CONNECT, (void*)bot, NULL);
     bot->state = CONSTATE_CONNECTED;
     break;
     
@@ -210,7 +210,7 @@ int parse(BotInfo *bot, char *line) {
     bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
-    callback_call(CALLBACK_JOIN, (void*)bot, NULL);
+    callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, NULL);
     bot->state = CONSTATE_LISTENING;
     break;
   default:
@@ -255,7 +255,7 @@ int parse(BotInfo *bot, char *line) {
         }
       }
       else
-        callback_call(CALLBACK_MSG, (void*)bot, msg);
+        callback_call_r(bot->cb, CALLBACK_MSG, (void*)bot, msg);
 
       free(msg);
     } 
@@ -332,6 +332,10 @@ void bot_cleanup(BotInfo *bot) {
   bot->commands = NULL; 
   close(bot->servfds.fd);
   freeaddrinfo(bot->res);
+}
+
+void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn) {
+  callback_set_r(bot->cb, id, fn);
 }
 
 void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) {
@@ -433,6 +437,3 @@ void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *da
     curNick = curNick->next;
   }
 }
-
-
-

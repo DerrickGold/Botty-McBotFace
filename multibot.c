@@ -9,6 +9,8 @@
 #include "botapi.h"
 
 #define BOT_COUNT 2
+#define DICE_BOT_ID 1
+#define GUN_BOT_ID 2
 
 IrcInfo server = {
   .port     = "6667",
@@ -19,6 +21,7 @@ IrcInfo server = {
 //Set up two bots for the same server and channel
 BotInfo conInfo[2] = {
   {
+    .id       = DICE_BOT_ID,
     .info     = &server,
     .host     = "CIRCBotHost",
     .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
@@ -27,6 +30,7 @@ BotInfo conInfo[2] = {
     .master   = "Derrick",
   },
   {
+    .id       = GUN_BOT_ID,
     .info     = &server,
     .host     = "CIRCBotHost",
     .nick     = {"GunBot", "CIrcBot2", "CIrcBot3"},
@@ -42,7 +46,7 @@ BotInfo conInfo[2] = {
  * features or logic to notable  responses or events.
  */
 int onConnect(void *data, IrcMsg *msg) {
-  printf("BOT HAS CONNECTED!\n");
+  printf("BOT (id: %d) HAS CONNECTED!\n", ((BotInfo*)data)->id);
   return 0;
 }
 
@@ -200,18 +204,21 @@ int main(int argc, char *argv[]) {
   time_t t;
   srand((unsigned) time(&t));
 
-  //hook in some callback functions
-  botty_setGlobalCallback(CALLBACK_CONNECT, &onConnect);
-  botty_setGlobalCallback(CALLBACK_JOIN, &onJoin);
-  botty_setGlobalCallback(CALLBACK_MSG, &onMsg);
-  botty_setGlobalCallback(CALLBACK_USRJOIN, &onUsrJoin);
-  botty_setGlobalCallback(CALLBACK_USRPART, &onUsrPart);
-  botty_setGlobalCallback(CALLBACK_SERVERCODE, &onServerResp);
-  botty_setGlobalCallback(CALLBACK_USRNICKCHANGE, &onNickChange);
+
 
   //initiate and register the default commands for all bots
   for (int i = 0; i < BOT_COUNT; i++) {
     if (botty_init(&conInfo[i], argc, argv, 0)) return -1;
+
+    //hook in some callback functions
+    botty_setCallback(&conInfo[i], CALLBACK_CONNECT, &onConnect);
+    botty_setCallback(&conInfo[i],CALLBACK_JOIN, &onJoin);
+    botty_setCallback(&conInfo[i],CALLBACK_MSG, &onMsg);
+    botty_setCallback(&conInfo[i],CALLBACK_USRJOIN, &onUsrJoin);
+    botty_setCallback(&conInfo[i],CALLBACK_USRPART, &onUsrPart);
+    botty_setCallback(&conInfo[i],CALLBACK_SERVERCODE, &onServerResp);
+    botty_setCallback(&conInfo[i],CALLBACK_USRNICKCHANGE, &onNickChange);
+    
     botty_addCommand(&conInfo[i], "say", 0, 2, &botcmd_say);
   }
 

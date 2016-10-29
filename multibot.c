@@ -128,7 +128,7 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
       game.loop++;
     }
     case 0:
-      botty_ctcpSend(data->bot, NULL, "ACTION", "loads a round then spins the chamber.");
+      botty_ctcpSend(data->bot, NULL, "ACTION", "loads a round and spins the cylinder.");
       game.shot = (rand() % BULLETS + 1) + 1;
       game.doQuote = (game.shot >= BULLETS);
       game.state = 1;
@@ -140,7 +140,7 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
         game.state = 0;
         game.loop++;
       } else
-        botty_ctcpSend(data->bot, NULL, "ACTION", "Click. %s is safe.", data->msg->nick);
+        botty_ctcpSend(data->bot, NULL, "ACTION", "Click... %s is safe.", data->msg->nick);
 
       if (game.doQuote && game.shot == 2) botty_send(data->bot, NULL, QUOTE);
       break;

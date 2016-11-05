@@ -16,8 +16,11 @@
 #define CMD_CHAR '~'
 #define PARAM_DELIM ':'
 #define BOT_ARG_DELIM ' '
+#define ARG_DELIM_LEN 1
 #define MSG_FOOTER "\r\n"
 #define CTCP_MARKER "\x01"
+#define ACTION_MSG "PRIVMSG"
+#define ACTION_EMPTY ""
 #define POLL_TIMEOUT_MS 100
 
 //number of alternative nicks and attempts the bot should try
@@ -25,6 +28,7 @@
 #define NICK_ATTEMPTS 3
 
 #define MAX_MSG_LEN 512
+#define MAX_MSG_SPLITS 4
 #define MAX_SERV_LEN 63
 #define MAX_NICK_LEN 30
 #define MAX_CHAN_LEN 50

@@ -59,6 +59,8 @@ extern int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
 extern int bot_connect(BotInfo *info);
 
+extern char *bot_getNick(BotInfo *bot);
+
 extern void bot_cleanup(BotInfo *info);
 
 extern void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
@@ -67,9 +69,9 @@ extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, Comman
 
 extern int bot_run(BotInfo *info);
 
-extern int ircSend(int fd, const char *msg);
+extern int ircSend(int fd, char *msg);
 
-extern int botSend(BotInfo *info, char *target, char *msg, ...);
+extern int botSend(BotInfo *info, char *target, char *action, char *ctcp, char *msg, ...);
 
 extern int ctcpSend(BotInfo *info, char *target, char *command, char *msg, ...);
 

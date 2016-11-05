@@ -51,7 +51,7 @@ int onConnect(void *data, IrcMsg *msg) {
 }
 
 int onJoin(void *data, IrcMsg *msg) {
-  botty_send((BotInfo *)data, NULL, "Hello, World!");
+  botty_say((BotInfo *)data, NULL, "Hello, World!");
   return 0;
 }
 
@@ -77,7 +77,7 @@ int onUsrPart(void *data, IrcMsg *msg) {
 int onNickChange(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   BotInfo *i = (BotInfo *)data;
-  botty_send(i, NULL, "I see what you did there %s... AKA %s!", msg->msg, msg->nick);
+  botty_say(i, NULL, "I see what you did there %s... AKA %s!", msg->msg, msg->nick);
   return 0;
 }
 
@@ -100,7 +100,7 @@ int onServerResp(void *data, IrcMsg *msg) {
  */
 int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  botty_send(data->bot, NULL, args[1]);
+  botty_say(data->bot, NULL, args[1]);
   return 0;
 }
 
@@ -142,7 +142,7 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
       } else
         botty_ctcpSend(data->bot, NULL, "ACTION", "Click... %s is safe.", data->msg->nick);
 
-      if (game.doQuote && game.shot == 2) botty_send(data->bot, NULL, QUOTE);
+      if (game.doQuote && game.shot == 2) botty_say(data->bot, NULL, QUOTE);
       break;
     }
   } while (game.loop--);
@@ -159,21 +159,21 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
   char delim = '\0';
   
   if (!args[1]) {
-    botty_send(data->bot, NULL, "Missing dice information");
+    botty_say(data->bot, NULL, "Missing dice information");
     return 0;
   }
 
   n = sscanf(args[1], "%u%c%u", &numDice, &delim, &dieMax);
   if (n < 3) {
-    botty_send(data->bot, NULL, "Invalid roll request: missing parameter");
+    botty_say(data->bot, NULL, "Invalid roll request: missing parameter");
     return 0;
   }
   else if (numDice > MAX_DICE || numDice < 1) {
-    botty_send(data->bot, NULL, "Invalid roll request: only 1 through 9 dice may be rolled.");
+    botty_say(data->bot, NULL, "Invalid roll request: only 1 through 9 dice may be rolled.");
     return 0;
   }
   else if (dieMax < 2) {
-    botty_send(data->bot, NULL, "Invalid roll request: dice must have a max greater than 1");
+    botty_say(data->bot, NULL, "Invalid roll request: dice must have a max greater than 1");
     return 0;
   }
 

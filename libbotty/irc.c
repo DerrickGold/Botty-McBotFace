@@ -30,42 +30,113 @@ static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
 
 int parse(BotInfo *bot, char *line);
 
+
 /*
- * Adds the required trailing '\r\n' to any message sent
- * to the irc server, and then procedes to send the message.
+ * Send an irc formatted message to the server.
+ * Assumes your message is appropriately sized for a single
+ * message.
  */
-int ircSend(int fd, const char *msg) {
-  static char wrapped[MAX_MSG_LEN];
-  size_t ilen = strlen(msg), wlen = strlen(MSG_FOOTER);
+static int _send(int fd, char *command, char *target, char *msg, char *ctcp) {
+  char curSendBuf[MAX_MSG_LEN];
+  int written = 0;
+  if (!command) command = ACTION_EMPTY;
+  if (!target) target = ACTION_EMPTY;
   
-  if (ilen + wlen > MAX_MSG_LEN) {
-    fprintf(stderr, MSG_LEN_EXCEED, MAX_MSG_LEN);
-    return -1;
+  if (!ctcp)
+    written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s %s%s", command, target, msg, MSG_FOOTER);
+  else {
+    written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s "CTCP_MARKER"%s %s"CTCP_MARKER"%s",
+                       command, target, ctcp, msg, MSG_FOOTER);
   }
-  wlen += ilen;
-  
-  strncpy(wrapped, msg, wlen);
-  strncat(wrapped, MSG_FOOTER, wlen);
-  fprintf(stdout, "\nSENDING: %s", wrapped);
-  return sendAll(fd, wrapped, wlen);
+
+  fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);
+  return sendAll(fd, curSendBuf, written);
 }
+
+/*
+ * Returns the number of bytes of overhead that is sent with each message.
+ * This overhead goes towards the IRC message limit.
+ */
+static unsigned int _getMsgOverHeadLen(char *command, char *target, char *ctcp, char *usernick) {
+  unsigned int len =  MAX_CMD_LEN + ARG_DELIM_LEN + MAX_CHAN_LEN + ARG_DELIM_LEN;
+  len += strlen(MSG_FOOTER) + strlen(usernick);
+  if (ctcp)
+    len += strlen(ctcp) + (strlen(CTCP_MARKER) << 1) + ARG_DELIM_LEN;
+
+  return len;
+}
+
+/*
+ * Split and send an irc formatted message to the server.
+ * If your message is too long, it will be split up and sent in up to
+ * MAX_MSG_SPLITS chunks.
+ *
+ */
+int ircSend_s(int fd, char *command, char *target, char *msg, char *ctcp, char *nick) {
+  unsigned int overHead = _getMsgOverHeadLen(command, target, ctcp, nick);
+  unsigned int msgLen =  overHead + strlen(msg);
+  if (msgLen >= MAX_MSG_LEN) {
+    //split the message into chunks
+    int maxSplitSize = MAX_MSG_LEN - overHead;
+    int chunks = (strlen(msg) / maxSplitSize) + 1;
+    chunks = (chunks < MAX_MSG_SPLITS) ? chunks : MAX_MSG_SPLITS;
+    
+    char replaced = 0;
+    char *nextMsg = msg, *end = 0, *last = msg + strlen(msg);
+    do {
+      end = nextMsg + maxSplitSize;
+      //split on words, so scan back for last space
+      while (*end != ' ' && end > nextMsg) end--;
+      //if we couldn't find a word to split on, so just split at the character limit
+      if (end <= nextMsg)  end = nextMsg + maxSplitSize;
+      if (end < last) {
+        replaced = *end;
+        *end = '\0';
+      }
+      _send(fd, command, target, nextMsg, ctcp);
+      nextMsg = end;
+      if (end < last) *end = replaced;
+      //remove any leading spaces for the next message
+      if (*nextMsg == ' ') nextMsg++;
+    } while (--chunks && nextMsg < last);
+    
+    return 0;
+  }
+    
+  return _send(fd, command, target, msg, ctcp);
+}
+
+int ircSend(int fd, char *msg) {
+  return _send(fd, NULL, NULL, msg, NULL);
+}
+
 
 /*
  * Automatically formats a PRIVMSG command for the bot to speak.
  */
-int _botSend(BotInfo *bot, char *target, char *fmt, va_list a) {
-  char fmtBuf[MAX_MSG_LEN], buf[MAX_MSG_LEN];
+
+int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *fmt, va_list a) {
+  char *msgBuf;
   if (!target) target = bot->info->channel;
-  snprintf(fmtBuf, sizeof(fmtBuf), "PRIVMSG %s :%s", target, fmt);
-  vsnprintf(buf, sizeof(buf), fmtBuf, a); 
-  return ircSend(bot->servfds.fd, buf);
+
+  //only buffer up to 4 message splits worth of text
+  size_t msgBufLen = MAX_MSG_LEN * MAX_MSG_SPLITS;
+  msgBuf = malloc(msgBufLen);
+  if (!msgBuf) {
+    perror("Msg alloc failed:");
+    return -1;
+  }
+  vsnprintf(msgBuf, msgBufLen - 1, fmt, a);
+  int status = ircSend_s(bot->servfds.fd, action, target, msgBuf, ctcp, bot_getNick(bot));
+  free(msgBuf);
+  return status;
 }
 
-int botSend(BotInfo *bot, char *target, char *fmt, ...) {
+int botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *fmt, ...) {
   int status = 0;
   va_list args;
   va_start(args, fmt);
-  status = _botSend(bot, target, fmt, args);
+  status = _botSend(bot, target, action, ctcp, fmt, args);
   va_end(args);
   return status;
 }
@@ -76,7 +147,7 @@ int ctcpSend(BotInfo *bot, char *target, char *command, char *msg, ...) {
   va_start(args, msg);
   vsnprintf(outbuf, MAX_MSG_LEN, msg, args);
   va_end(args);
-  return botSend(bot, target, CTCP_MARKER"%s %s"CTCP_MARKER, command, outbuf);
+  return botSend(bot, target, ACTION_MSG, NULL, CTCP_MARKER"%s %s"CTCP_MARKER, command, outbuf);
 }
 
 /*
@@ -322,6 +393,10 @@ int bot_connect(BotInfo *bot) {
   }  
 
   return 0;
+}
+
+char *bot_getNick(BotInfo *bot) {
+  return bot->nick[bot->nickAttempt];
 }
 
 void bot_cleanup(BotInfo *bot) {

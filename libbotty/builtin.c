@@ -8,6 +8,7 @@
 
 #include "builtin.h"
 #include "globals.h"
+#include "botapi.h"
 
 /*
  * Default commands that should be available for 
@@ -28,27 +29,27 @@ int botcmd_help(void *i, char *args[MAX_BOT_ARGS]) {
   HashTable_forEach(data->bot->commands, output, &printCmd);
   end = strrchr(output, ',');
   if (end) *end = '\0';
-  botSend(data->bot, target, output);
+  botty_say(data->bot, target, output);
   return 0;
 }
 
 int botcmd_info(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   char *target = botcmd_getTarget(data);
-  botSend(data->bot, target, INFO_MSG);
+  botty_say(data->bot, target, INFO_MSG);
   return 0;
 }
 
 int botcmd_source(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   char *target = botcmd_getTarget(data);
-  botSend(data->bot, target, SRC_MSG);
+  botty_say(data->bot, target, SRC_MSG);
   return 0;
 }
 
 int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  botSend(data->bot, NULL, "Seeya!");
+  botty_say(data->bot, NULL, "Seeya!");
   ircSend(data->bot->servfds.fd, "QUIT :leaving");
   return -1;
 }
@@ -62,20 +63,20 @@ int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
  * to the channel it is in.
  */
 char *botcmd_getTarget(CmdData *data) {
-   char *target = data->msg->channel;
-   if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
+  char *target = data->msg->channel;
+  if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
     target = data->msg->nick;
-
-   return target;
+  
+  return target;
 }
 
 /*
  * Initialize the built in commands provided in this file.
  */
 int botcmd_builtin(BotInfo *bot) {
-    bot_addcommand(bot, "help", 0, 1, &botcmd_help);
-    bot_addcommand(bot, "info", 0, 1, &botcmd_info);
-    bot_addcommand(bot, "source", 0, 1, &botcmd_source);  
-    bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_die);
-    return 0;
+  bot_addcommand(bot, "help", 0, 1, &botcmd_help);
+  bot_addcommand(bot, "info", 0, 1, &botcmd_info);
+  bot_addcommand(bot, "source", 0, 1, &botcmd_source);  
+  bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_die);
+  return 0;
 }

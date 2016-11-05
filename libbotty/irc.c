@@ -40,14 +40,18 @@ int parse(BotInfo *bot, char *line);
 static int _send(int fd, char *command, char *target, char *msg, char *ctcp) {
   char curSendBuf[MAX_MSG_LEN];
   int written = 0;
+  char *sep = PARAM_DELIM_STR;
+
+  if (!command || !target) sep = ACTION_EMPTY;
   if (!command) command = ACTION_EMPTY;
   if (!target) target = ACTION_EMPTY;
   
+  
   if (!ctcp)
-    written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s %s%s", command, target, msg, MSG_FOOTER);
+    written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s %s%s%s", command, target, sep, msg, MSG_FOOTER);
   else {
-    written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s "CTCP_MARKER"%s %s"CTCP_MARKER"%s",
-                       command, target, ctcp, msg, MSG_FOOTER);
+    written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s %s"CTCP_MARKER"%s %s"CTCP_MARKER"%s",
+                       command, target, sep, ctcp, msg, MSG_FOOTER);
   }
 
   fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);

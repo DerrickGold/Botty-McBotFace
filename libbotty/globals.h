@@ -15,6 +15,7 @@
 #define SERVER_PREFIX "irc."
 #define CMD_CHAR '~'
 #define PARAM_DELIM ':'
+#define PARAM_DELIM_STR ":"
 #define BOT_ARG_DELIM ' '
 #define ARG_DELIM_LEN 1
 #define MSG_FOOTER "\r\n"

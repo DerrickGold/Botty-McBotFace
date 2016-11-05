@@ -8,6 +8,8 @@
 
 #include "botapi.h"
 
+#define MAX_NS 999999999
+
 /*=====================================================
  * Bot Configuration
  *===================================================*/
@@ -18,13 +20,11 @@ BotInfo conInfo = {
     .channel  = "#CHANGETHIS"
   },
   .host     = "CIRCBotHost",
-  .nick     = {"DiceBot", "CIrcBot2", "CIrcBot3"},
+  .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
   .master   = "Derrick",
 };
-
-
 /*=====================================================
  * Mailbox Structures and Methods
  *===================================================*/
@@ -273,16 +273,71 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+//A sample 'process' function that can be given to the bot
+static int _draw(void *b, void *args) {
+  #define MAX_NS 999999999
+  
+  BotInfo *bot = (BotInfo *)b;
+  FILE *input = (FILE *)args;
+  char buf[MAX_MSG_LEN];
 
-int botcmd_testSplitMsg(void *i, char *args[MAX_BOT_ARGS]) {
+  struct timespec sleepTimer = {
+    .tv_sec = 0,
+    .tv_nsec = MAX_NS/5
+  };
+
+  if (feof(input))
+    goto _fin;
+
+  int ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS);
+  if (!(ret && bot->servfds.revents & POLLOUT))
+    return 1;
+  
+  char *s = fgets(buf, MAX_MSG_LEN, input);
+  if (!s)
+    goto _fin;
+    
+  char *newline = strchr(s, '\n');
+  if (newline) *newline = '\0';
+  
+  
+  if (botty_say(bot, NULL, ". %s", s) < 0)
+    goto _fin;
+  
+  nanosleep(&sleepTimer, NULL);
+  //return 1 to keep the process going
+  return 1;
+
+  _fin:
+  //return negative value to indicate the process
+  //is complete  
+  fclose(input);
+  return -1;
+}
+
+int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  static char *longMsg = "Hi everyone! This is a super long message that is being used to test, the split message"
-    " feature that I am adding to Botty McBotFace. A regular irc message is limited to 512 characters, so this one is "
-    "really testing the limits here, it'll probably crash the bot to be honest. However, here is for the best!";
-
-  botty_say(data->bot, NULL, "%s %s", longMsg, longMsg);
+  char path[512];
+  char *file = args[1];
+  if (!file) {
+    botty_say(data->bot, NULL, "%s: please specify a picture.", data->msg->nick);
+    return 0;
+  }
+  
+  snprintf(path, sizeof(path), "art/%s.txt", file); 
+  FILE *f = fopen(path, "rb");
+  if (!f) {
+    botty_say(data->bot, NULL, "File '%s' does not exist!", file);
+    return 0;
+  }
+  //initialize and start the draw process
+  //A process will block all input for a given bot until
+  //it has completed the assigned process.
+  bot_setProcess(data->bot, &_draw, (void*)f);
   return 0;
 }
+
+
 
 
 
@@ -311,13 +366,18 @@ int main(int argc, char *argv[]) {
 
   botty_addCommand(&conInfo, "msg", 0, 3, &botcmd_msg);
   botty_addCommand(&conInfo, "mail", 0, 1, &botcmd_mail);
-
-  botty_addCommand(&conInfo, "longmsg", 0, 1, &botcmd_testSplitMsg);
+  botty_addCommand(&conInfo, "draw", 0, 2, &botcmd_draw);
   
   botty_connect(&conInfo);
+  
+  //process input 30 times per second
+  struct timespec sleepTimer = {
+    .tv_sec = 0,
+    .tv_nsec = MAX_NS/30
+  };
   while (((status = botty_process(&conInfo)) >= 0)) {
-    //hack prevent 100% cpu usage
-    //sleep(1);
+    //prevent 100% cpu usage
+    nanosleep(&sleepTimer, NULL);
   }
   botty_cleanup(&conInfo);
 

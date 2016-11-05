@@ -25,6 +25,16 @@ typedef struct IrcInfo {
   char channel[MAX_CHAN_LEN];
 } IrcInfo;
 
+
+typedef int (*BotProcessFn)(void *, void *);
+
+typedef struct BotProcess {
+  BotProcessFn fn;
+  void *arg;
+  char busy;
+} BotProcess;
+
+
 typedef struct BotInfo {
   //user config values
   int id;
@@ -46,10 +56,12 @@ typedef struct BotInfo {
   Callback cb[CALLBACK_COUNT];
   HashTable *commands;
   NickList *names;
-  
+
+  BotProcess process;
   //some pointer the user can use
   void *data;
 } BotInfo;
+
 
 extern int irc_init(void);
 
@@ -62,6 +74,14 @@ extern int bot_connect(BotInfo *info);
 extern char *bot_getNick(BotInfo *bot);
 
 extern void bot_cleanup(BotInfo *info);
+
+extern void bot_setProcess(BotInfo *bot, BotProcessFn fn, void *args);
+
+extern void bot_clearProcess(BotInfo *bot);
+
+extern void bot_runProcess(BotInfo *bot);
+
+extern int bot_isProcessing(BotInfo *bot);
 
 extern void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
 

@@ -31,6 +31,7 @@ static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
 int parse(BotInfo *bot, char *line);
 
 
+
 /*
  * Send an irc formatted message to the server.
  * Assumes your message is appropriately sized for a single
@@ -295,6 +296,9 @@ int parse(BotInfo *bot, char *line) {
       break;
     }
     else {
+      //ignore non-critical events while processing
+      if (bot_isProcessing(bot)) break;
+      
       BotCmd *cmd = NULL;
       IrcMsg *msg = newMsg(line, bot->commands, &cmd);
       IRC_API_Actions action = IRC_ACTION_NOP;
@@ -417,15 +421,40 @@ void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) 
   command_reg(bot->commands, cmd, flags, args, fn);
 }
 
+void bot_setProcess(BotInfo *bot, BotProcessFn fn, void *args) {
+  bot->process.fn = fn;
+  bot->process.arg = args;
+  bot->process.busy = 1;
+}
+
+void bot_clearProcess(BotInfo *bot) {
+  bot->process.fn = NULL;
+  bot->process.arg = NULL;
+  bot->process.busy = 0;
+}
+
+void bot_runProcess(BotInfo *bot) {
+  if (bot->process.fn) {
+    if ((bot->process.busy = bot->process.fn((void *)bot, bot->process.arg)) < 0)
+      bot_clearProcess(bot);
+  }
+}
+
+int bot_isProcessing(BotInfo *bot) {
+  return bot->process.busy > 0;
+}
+
 /*
  * Run the bot! The bot will connect to the server and start
  * parsing replies.
  */
 int bot_run(BotInfo *bot) {
   int n, ret;
+
+  bot_runProcess(bot);
   //process all input first before receiving more
   if (bot->line) {
-    if ((ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS)) && bot->servfds.revents & POLLOUT) {
+    if ((ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS)) && bot->servfds.revents & POLLOUT) {      
       if ((n = parse(bot, bot->line)) < 0) return n;
       bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
     }

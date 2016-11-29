@@ -1,6 +1,9 @@
 # Botty-McBotFace
 A simple IRC Bot/Bot library in C
 
+![Screenshot](https://github.com/DerrickGold/Botty-McBotFace/blob/master/screenshots/botty.png?raw=true)
+
+
 ## Building
 A sample bot configuration has been included in `samplebot.c`. Once this bot
 is configured via the IrcInfo and BotInfo structs at the top, simply run `build.sh`

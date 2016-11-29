@@ -11,7 +11,6 @@ all: botty.a
 botty.a: commands.o callback.o ircmsg.o connection.o hash.o irc.o builtin.o botapi.o
 	ar rcs $@ $^
 
-botty.o: botty.c botapi.h hash.h globals.h callback.h cmddata.h  irc.h commands.h ircmsg.h
 commands.o: commands.c commands.h globals.h hash.h
 callback.o: callback.c callback.h ircmsg.h globals.h ircmsg.h
 ircmsg.o: ircmsg.c ircmsg.h globals.h commands.h hash.h

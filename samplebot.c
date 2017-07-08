@@ -15,15 +15,15 @@
  *===================================================*/
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
-    .port     = "6667",
-    .server   = "CHANGETHIS",
-    .channel  = "#CHANGETHIS"
+    .port     = "6697",
+    .server   = "irc.freenode.net",
+    .channel  = "#palib"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "Derrick",
+  .master   = "BassAceGold",
 };
 /*=====================================================
  * Mailbox Structures and Methods
@@ -289,8 +289,10 @@ static int _draw(void *b, void *args) {
   if (feof(input))
     goto _fin;
 
-  int ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS);
-  if (!(ret && bot->servfds.revents & POLLOUT))
+  //int ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS);
+  int ret = 0;
+  if (!clientPoll(&bot->conInfo, POLLOUT, &ret))
+    //if (!(ret && bot->servfds.revents & POLLOUT))
     return 1;
   
   char *s = fgets(buf, MAX_MSG_LEN, input);

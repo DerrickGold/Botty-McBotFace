@@ -50,7 +50,7 @@ int botcmd_source(void *i, char *args[MAX_BOT_ARGS]) {
 int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   botty_say(data->bot, NULL, "Seeya!");
-  ircSend(data->bot->servfds.fd, "QUIT :leaving");
+  ircSend(&data->bot->conInfo, "QUIT :leaving");
   return -1;
 }
 

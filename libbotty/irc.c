@@ -37,7 +37,7 @@ int parse(BotInfo *bot, char *line);
  * Assumes your message is appropriately sized for a single
  * message.
  */
-static int _send(int fd, char *command, char *target, char *msg, char *ctcp) {
+static int _send(SSLConInfo *conInfo, char *command, char *target, char *msg, char *ctcp) {
   char curSendBuf[MAX_MSG_LEN];
   int written = 0;
   char *sep = PARAM_DELIM_STR;
@@ -55,7 +55,8 @@ static int _send(int fd, char *command, char *target, char *msg, char *ctcp) {
   }
 
   fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);
-  return sendAll(fd, curSendBuf, written);
+  //return sendAll(fd, curSendBuf, written);
+  return sendAll(conInfo, curSendBuf, written);
 }
 
 /*
@@ -77,7 +78,7 @@ static unsigned int _getMsgOverHeadLen(char *command, char *target, char *ctcp, 
  * MAX_MSG_SPLITS chunks.
  *
  */
-int ircSend_s(int fd, char *command, char *target, char *msg, char *ctcp, char *nick) {
+int ircSend_s(SSLConInfo *conInfo, char *command, char *target, char *msg, char *ctcp, char *nick) {
   unsigned int overHead = _getMsgOverHeadLen(command, target, ctcp, nick);
   unsigned int msgLen =  overHead + strlen(msg);
   if (msgLen >= MAX_MSG_LEN) {
@@ -98,7 +99,7 @@ int ircSend_s(int fd, char *command, char *target, char *msg, char *ctcp, char *
         replaced = *end;
         *end = '\0';
       }
-      _send(fd, command, target, nextMsg, ctcp);
+      _send(conInfo, command, target, nextMsg, ctcp);
       nextMsg = end;
       if (end < last) *end = replaced;
       //remove any leading spaces for the next message
@@ -108,11 +109,11 @@ int ircSend_s(int fd, char *command, char *target, char *msg, char *ctcp, char *
     return 0;
   }
     
-  return _send(fd, command, target, msg, ctcp);
+  return _send(conInfo, command, target, msg, ctcp);
 }
 
-int ircSend(int fd, char *msg) {
-  return _send(fd, NULL, NULL, msg, NULL);
+int ircSend(SSLConInfo *conInfo, char *msg) {
+  return _send(conInfo, NULL, NULL, msg, NULL);
 }
 
 
@@ -132,7 +133,7 @@ int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *fmt, va
     return -1;
   }
   vsnprintf(msgBuf, msgBufLen - 1, fmt, a);
-  int status = ircSend_s(bot->servfds.fd, action, target, msgBuf, ctcp, bot_getNick(bot));
+  int status = ircSend_s(&bot->conInfo, action, target, msgBuf, ctcp, bot_getNick(bot));
   free(msgBuf);
   return status;
 }
@@ -251,7 +252,7 @@ int parse(BotInfo *bot, char *line) {
   if (!strncmp(line, "PING", strlen("PING"))) {
     char *pong = line + strlen("PING") + 1;
     snprintf(sysBuf, sizeof(sysBuf), "PONG %s", pong);
-    ircSend(bot->servfds.fd, sysBuf);
+    ircSend(&bot->conInfo, sysBuf);
     return 0;
   }
   
@@ -273,16 +274,16 @@ int parse(BotInfo *bot, char *line) {
   case CONSTATE_CONNECTED:
     //register the bot
     snprintf(sysBuf, sizeof(sysBuf), "NICK %s", bot->nick[bot->nickAttempt]);
-    ircSend(bot->servfds.fd, sysBuf);
+    ircSend(&bot->conInfo, sysBuf);
     snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", bot->ident, bot->host, bot->realname);
-    ircSend(bot->servfds.fd, sysBuf);
+    ircSend(&bot->conInfo, sysBuf);
     //go to listening state to wait for registration confirmation
     bot->state = CONSTATE_LISTENING;
     break;
 
   case CONSTATE_REGISTERED:
     snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", bot->info->channel);
-    ircSend(bot->servfds.fd, sysBuf);
+    ircSend(&bot->conInfo, sysBuf);
     bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
@@ -384,11 +385,17 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
 
 int bot_connect(BotInfo *bot) {
   if (!bot) return -1;
-  
-  bot->servfds.fd = clientInit(bot->info->server, bot->info->port, &bot->res);
-  if (bot->servfds.fd < 0) exit(1);
+
+#if defined(USE_OPENSSL)
+  if (clientInit_ssl(bot->info->server, bot->info->port, &bot->conInfo)) exit(1);
   bot->state = CONSTATE_NONE;
-  bot->servfds.events = POLLIN | POLLPRI | POLLOUT | POLLWRBAND;
+  return 0;
+#else
+  
+  bot->conInfo.servfds.fd = clientInit(bot->info->server, bot->info->port, &bot->conInfo.res);
+  if (bot->conInfo.servfds.fd < 0) exit(1);
+  bot->state = CONSTATE_NONE;
+  bot->conInfo.servfds.events = POLLIN | POLLPRI | POLLOUT | POLLWRBAND;
   
   int n = strlen(SERVER_PREFIX);
   if (strncmp(SERVER_PREFIX, bot->info->server, n)) {
@@ -399,8 +406,8 @@ int bot_connect(BotInfo *bot) {
       printf("NEW SERVER NAME: %s\n", bot->info->server);
     }
   }  
-
   return 0;
+#endif
 }
 
 char *bot_getNick(BotInfo *bot) {
@@ -413,8 +420,8 @@ void bot_cleanup(BotInfo *bot) {
   bot_purgeNames(bot);
   if (bot->commands) command_cleanup(bot->commands);
   bot->commands = NULL; 
-  close(bot->servfds.fd);
-  freeaddrinfo(bot->res);
+  close(bot->conInfo.servfds.fd);
+  freeaddrinfo(bot->conInfo.res);
 }
 
 void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn) {
@@ -453,12 +460,12 @@ int bot_isProcessing(BotInfo *bot) {
  * parsing replies.
  */
 int bot_run(BotInfo *bot) {
-  int n, ret;
+  int n = 0, ret = 0;
 
   bot_runProcess(bot);
   //process all input first before receiving more
   if (bot->line) {
-    if ((ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS)) && bot->servfds.revents & POLLOUT) {      
+    if (clientPoll(&bot->conInfo, POLLOUT, &ret)) {
       if ((n = parse(bot, bot->line)) < 0) return n;
       bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
     }
@@ -467,8 +474,9 @@ int bot_run(BotInfo *bot) {
   
   bot->line_off = NULL;
   memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
-  if ((ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS)) && bot->servfds.revents & POLLIN) {
-    n = recv(bot->servfds.fd, bot->recvbuf, sizeof(bot->recvbuf), 0);    
+  
+  if (clientPoll(&bot->conInfo, POLLIN, &ret)) {
+    n = clientRead(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
     if (!n) {
       printf("Remote closed connection\n");
       return -2;
@@ -478,6 +486,7 @@ int bot_run(BotInfo *bot) {
       return -3;
     }
   }
+  fprintf(stderr, "Polling input: %d\n", ret);
   
   //parse replies one line at a time
   bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);

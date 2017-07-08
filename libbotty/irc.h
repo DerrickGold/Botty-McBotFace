@@ -5,6 +5,8 @@
 #include "globals.h"
 #include "commands.h"
 #include "callback.h"
+#include "connection.h"
+
 
 typedef enum {
   CONSTATE_NONE,
@@ -24,8 +26,6 @@ typedef struct IrcInfo {
   char server[MAX_SERV_LEN];
   char channel[MAX_CHAN_LEN];
 } IrcInfo;
-
-
 typedef int (*BotProcessFn)(void *, void *);
 
 typedef struct BotProcess {
@@ -46,8 +46,6 @@ typedef struct BotInfo {
   char master[30];
   
   //connection state info
-  struct addrinfo *res;
-  struct pollfd servfds;
   char recvbuf[MAX_MSG_LEN];
   char *line, *line_off;
   ConState state;
@@ -58,6 +56,7 @@ typedef struct BotInfo {
   NickList *names;
 
   BotProcess process;
+  SSLConInfo conInfo;
   //some pointer the user can use
   void *data;
 } BotInfo;
@@ -89,7 +88,7 @@ extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, Comman
 
 extern int bot_run(BotInfo *info);
 
-extern int ircSend(int fd, char *msg);
+extern int ircSend(SSLConInfo *conInfo, char *msg);
 
 extern int botSend(BotInfo *info, char *target, char *action, char *ctcp, char *msg, ...);
 

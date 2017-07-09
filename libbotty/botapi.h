@@ -30,22 +30,24 @@ extern void botty_cleanup(BotInfo *bot);
 
 //returns int based on success
 #define botty_send(bot, target, action, ctcp, fmt, ...)  \
-  botSend(bot, target, action, ctcp, fmt, ##__VA_ARGS__)
+  bot_send(bot, target, action, ctcp, fmt, ##__VA_ARGS__)
 
 #define botty_say(bot, target, fmt, ...) \
-  botSend(bot, target, ACTION_MSG, NULL, fmt, ##__VA_ARGS__)
+  bot_send(bot, target, ACTION_MSG, NULL, fmt, ##__VA_ARGS__)
 
 //returns int, negative value indicates error
 #define botty_ctcpSend(bot, target, command, msg, ...) \
-  botSend(bot, target, ACTION_MSG, command, msg, ##__VA_ARGS__)
+  bot_send(bot, target, ACTION_MSG, command, msg, ##__VA_ARGS__)
 
-//ctcpSend(bot, target, command, msg, ##__VA_ARGS__)
+//bot_ctcp_send(bot, target, command, msg, ##__VA_ARGS__)
 
 //returns char * pointer to where the bot should write its output
 //from a given message (either a particular user in private message, or
 //the channel the bot is residing in).
 #define botty_respondDest(cmddata) \
-  botcmd_getTarget(cmddata)
+  botcmd_builtin_getTarget(cmddata)
 
+#define botty_isThrottled(bot) \
+  bot_isThrottled(bot)
 
 #endif //__BOT_API_H__

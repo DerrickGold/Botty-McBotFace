@@ -16,8 +16,11 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "irc.freenode.net",
+    .server   = "irc.freenode.org",
     .channel  = "#palib"
+  },
+  .conInfo = (SSLConInfo) {
+    .enableSSL = 1,
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
@@ -30,7 +33,7 @@ BotInfo conInfo = {
  *===================================================*/
 #define MIN_MAIL_BOXES 13
 /*
- * Each user can have a mailbox with 
+ * Each user can have a mailbox with
  * multiple messages stored for them to
  * view later.
  */
@@ -52,7 +55,7 @@ typedef struct MailBox {
 char *getNotified(char *nick);
 int numMsgs(char *nick);
 void readMail(BotInfo *bot, char *nick);
-int saveMail(char *to, char *from, char *message);  
+int saveMail(char *to, char *from, char *message);
 void destroyAllMailBoxes(void);
 
 
@@ -87,7 +90,7 @@ static int onJoin(void *data, IrcMsg *msg) {
 
 static int onMsg(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
-  
+
   printf("Recieved msg from %s in %s: %s\n", msg->nick, msg->channel, msg->msg);
   mailNotify((BotInfo *)data, msg->nick);
   return 0;
@@ -147,7 +150,7 @@ int botcmd_msg(void *i, char *args[MAX_BOT_ARGS]) {
                data->msg->nick);
     return 0;
   }
-  
+
   if (saveMail(to, data->msg->nick, msg)) {
     botty_say(data->bot, NULL,
                "%s: There was an error saving your message, contact bot owner for assistance.",
@@ -169,9 +172,9 @@ int botcmd_mail(void *i, char *args[MAX_BOT_ARGS]) {
   botty_say(data->bot, NULL, "%s: You have %d message(s) remaining.", data->msg->nick, left);
   return 0;
 }
- 
+
 /*
- * Some fun commands that aren't necessary, but illustrate 
+ * Some fun commands that aren't necessary, but illustrate
  * how to use this bot api.
  */
 int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
@@ -221,18 +224,18 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
       break;
     }
   } while (game.loop--);
-  
+
   return 0;
 }
 
 int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
   #define MAX_DICE 9
-  
+
   CmdData *data = (CmdData *)i;
   char msg[MAX_MSG_LEN];
   int numDice = 0, dieMax = 0, n = 0;
   char delim = '\0';
-  
+
   if (!args[1]) {
     botty_say(data->bot, NULL, "Missing dice information");
     return 0;
@@ -276,43 +279,57 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
 //A sample 'process' function that can be given to the bot
 static int _draw(void *b, void *args) {
   #define MAX_NS 999999999
-  
+
   BotInfo *bot = (BotInfo *)b;
   FILE *input = (FILE *)args;
   char buf[MAX_MSG_LEN];
+  static char throttleBuf[MAX_MSG_LEN];
 
   struct timespec sleepTimer = {
     .tv_sec = 0,
-    .tv_nsec = MAX_NS/5
+    .tv_nsec = MAX_NS
+  };
+
+  struct timespec throttleTimer = {
+    .tv_sec = 3,
+    .tv_nsec = 0
   };
 
   if (feof(input))
     goto _fin;
 
-  //int ret = poll(&bot->servfds, 1, POLL_TIMEOUT_MS);
-  int ret = 0;
-  if (!clientPoll(&bot->conInfo, POLLOUT, &ret))
-    //if (!(ret && bot->servfds.revents & POLLOUT))
-    return 1;
-  
-  char *s = fgets(buf, MAX_MSG_LEN, input);
-  if (!s)
-    goto _fin;
-    
-  char *newline = strchr(s, '\n');
-  if (newline) *newline = '\0';
-  
-  
-  if (botty_say(bot, NULL, ". %s", s) < 0)
-    goto _fin;
-  
+  if (botty_isThrottled(bot)) {
+    fprintf(stderr, "Sleeping due to throttling\n");
+    nanosleep(&throttleTimer, NULL);
+    if (botty_say(bot, NULL, ". %s", throttleBuf) < 0)
+      goto _fin;
+  }
+  else {
+    int ret = 0;
+    if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret))
+      return 1;
+
+    char *s = fgets(buf, MAX_MSG_LEN, input);
+    if (!s)
+      goto _fin;
+
+    char *newline = strchr(s, '\n');
+    if (newline) *newline = '\0';
+    memset(throttleBuf, 0, sizeof(throttleBuf));
+    memcpy(throttleBuf, buf, sizeof(buf));
+    //strncpy(throttleBuf, s, MAX_MSG_LEN);
+
+    if (botty_say(bot, NULL, ". %s", s) < 0)
+      goto _fin;
+  }
+
   nanosleep(&sleepTimer, NULL);
   //return 1 to keep the process going
   return 1;
 
   _fin:
   //return negative value to indicate the process
-  //is complete  
+  //is complete
   fclose(input);
   return -1;
 }
@@ -325,8 +342,8 @@ int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
     botty_say(data->bot, NULL, "%s: please specify a picture.", data->msg->nick);
     return 0;
   }
-  
-  snprintf(path, sizeof(path), "art/%s.txt", file); 
+
+  snprintf(path, sizeof(path), "art/%s.txt", file);
   FILE *f = fopen(path, "rb");
   if (!f) {
     botty_say(data->bot, NULL, "File '%s' does not exist!", file);
@@ -359,7 +376,7 @@ int main(int argc, char *argv[]) {
 
   if (botty_init(&conInfo, argc, argv, 0))
     return -1;
-  
+
   //register some extra commands
   botty_addCommand(&conInfo, "say", 0, 2, &botcmd_say);
   botty_addCommand(&conInfo,"roll", 0, 2, &botcmd_roll);
@@ -369,9 +386,9 @@ int main(int argc, char *argv[]) {
   botty_addCommand(&conInfo, "msg", 0, 3, &botcmd_msg);
   botty_addCommand(&conInfo, "mail", 0, 1, &botcmd_mail);
   botty_addCommand(&conInfo, "draw", 0, 2, &botcmd_draw);
-  
+
   botty_connect(&conInfo);
-  
+
   //process input 30 times per second
   struct timespec sleepTimer = {
     .tv_sec = 0,
@@ -394,20 +411,20 @@ int main(int argc, char *argv[]) {
  *===================================================*/
 void cleanupMailBox(MailBox *box) {
   if (!box) return;
-  
+
   Mail *cur = box->messages, *next = NULL;
   while (cur) {
     next = cur->next;
     free(cur);
     cur = next;
   }
-  
+
   free(box);
 }
 
 static int cleanupHashedBox(HashEntry *entry, void *data) {
   //cleanup user name and stored messages
-  if (entry->key) free(entry->key); 
+  if (entry->key) free(entry->key);
   cleanupMailBox((MailBox *)entry->data);
   return 0;
 }
@@ -443,7 +460,7 @@ int saveMail(char *to, char *from, char *message) {
       return -1;
     }
     strncpy(nick, to, strlen(to));
-    
+
     HashEntry *newUser = HashEntry_create(nick, newBox);
     if (!newUser) {
       fprintf(stderr, "Error allocating mailbox for nick: %s\n", nick);
@@ -507,14 +524,14 @@ int numMsgs(char *nick) {
     fprintf(stderr, "NUMMSGS NO BOXES\n");
     return 0;
   }
-  
+
   HashEntry *user = HashTable_find(mailBoxes, nick);
   if (!user) {
     fprintf(stderr, "NUMMSGS NO USER: '%s'\n", nick);
     return 0;
   }
-  
-  MailBox *box = (MailBox *)user->data;  
+
+  MailBox *box = (MailBox *)user->data;
   if (box->count <= 0 || !box->messages) {
     fprintf(stderr, "NUMMSGS NO MAIL\n");
     return 0;
@@ -526,10 +543,10 @@ int numMsgs(char *nick) {
 void readMail(BotInfo *bot, char *nick) {
   int msgCount = numMsgs(nick);
   if (!msgCount) return;
-  
+
   //if msg count is > 0, then the user exists and has a box with messages
   HashEntry *user = HashTable_find(mailBoxes, nick);
-  MailBox *box = (MailBox *)user->data;  
+  MailBox *box = (MailBox *)user->data;
   Mail *message = box->messages;
   box->messages = message->next;
 
@@ -537,7 +554,7 @@ void readMail(BotInfo *bot, char *nick) {
   char buff[20];
   struct tm * timeinfo = localtime (&message->sent);
   strftime(buff, sizeof(buff), "%b %d @ %H:%M", timeinfo);
-  
+
   botty_say(bot, NULL, "%s: [%s <%s>] %s", nick, buff, message->from, message->msg);
   free(message);
   box->count--;

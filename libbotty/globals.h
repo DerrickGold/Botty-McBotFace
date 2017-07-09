@@ -24,6 +24,8 @@
 #define ACTION_EMPTY ""
 #define POLL_TIMEOUT_MS 100
 
+#define THROTTLE_NEEDLE "throttl"
+
 //number of alternative nicks and attempts the bot should try
 //before giving up registering to the server
 #define NICK_ATTEMPTS 3
@@ -40,6 +42,7 @@
 #define REG_SUC_CODE "001"
 #define NAME_REPLY "353"
 #define REG_ERR_CODE "433"
+#define NOTICE_ACTION "NOTICE"
 
 #define ACTION_HASH_SIZE 43
 #define COMMAND_HASH_SIZE 13

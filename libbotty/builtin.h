@@ -6,6 +6,6 @@
 
 extern int botcmd_builtin(BotInfo *bot);
 
-extern char *botcmd_getTarget(CmdData *data);
+extern char *botcmd_builtin_getTarget(CmdData *data);
 
 #endif //__BUILTIN_H__

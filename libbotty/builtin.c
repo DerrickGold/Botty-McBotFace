@@ -11,7 +11,7 @@
 #include "botapi.h"
 
 /*
- * Default commands that should be available for 
+ * Default commands that should be available for
  * for all bots.
  */
 static int printCmd(HashEntry *entry, void *output) {
@@ -20,12 +20,12 @@ static int printCmd(HashEntry *entry, void *output) {
   return 0;
 }
 
-int botcmd_help(void *i, char *args[MAX_BOT_ARGS]) {
+static int botcmd_builtin_help(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   char output[MAX_MSG_LEN] = "Available commands: ";
   char *end = NULL;
-  char *target = botcmd_getTarget(data);
-  
+  char *target = botcmd_builtin_getTarget(data);
+
   HashTable_forEach(data->bot->commands, output, &printCmd);
   end = strrchr(output, ',');
   if (end) *end = '\0';
@@ -33,24 +33,24 @@ int botcmd_help(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
-int botcmd_info(void *i, char *args[MAX_BOT_ARGS]) {
+static int botcmd_builtin_info(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  char *target = botcmd_getTarget(data);
+  char *target = botcmd_builtin_getTarget(data);
   botty_say(data->bot, target, INFO_MSG);
   return 0;
 }
 
-int botcmd_source(void *i, char *args[MAX_BOT_ARGS]) {
+static int botcmd_builtin_source(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  char *target = botcmd_getTarget(data);
+  char *target = botcmd_builtin_getTarget(data);
   botty_say(data->bot, target, SRC_MSG);
   return 0;
 }
 
-int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
+static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   botty_say(data->bot, NULL, "Seeya!");
-  ircSend(&data->bot->conInfo, "QUIT :leaving");
+  bot_irc_send(&data->bot->conInfo, "QUIT :leaving");
   return -1;
 }
 
@@ -62,11 +62,11 @@ int botcmd_die(void *i, char *args[MAX_BOT_ARGS]) {
  * it can respond in the private message as opposed
  * to the channel it is in.
  */
-char *botcmd_getTarget(CmdData *data) {
+char *botcmd_builtin_getTarget(CmdData *data) {
   char *target = data->msg->channel;
   if (!strcmp(target, data->bot->nick[data->bot->nickAttempt]))
     target = data->msg->nick;
-  
+
   return target;
 }
 
@@ -74,9 +74,9 @@ char *botcmd_getTarget(CmdData *data) {
  * Initialize the built in commands provided in this file.
  */
 int botcmd_builtin(BotInfo *bot) {
-  bot_addcommand(bot, "help", 0, 1, &botcmd_help);
-  bot_addcommand(bot, "info", 0, 1, &botcmd_info);
-  bot_addcommand(bot, "source", 0, 1, &botcmd_source);  
-  bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_die);
+  bot_addcommand(bot, "help", 0, 1, &botcmd_builtin_help);
+  bot_addcommand(bot, "info", 0, 1, &botcmd_builtin_info);
+  bot_addcommand(bot, "source", 0, 1, &botcmd_builtin_source);
+  bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_builtin_die);
   return 0;
 }

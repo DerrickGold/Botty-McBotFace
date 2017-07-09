@@ -14,30 +14,25 @@
 
 
 typedef struct SSLConInfo {
+  char enableSSL;
   int socket;
   SSL_CTX *ctx;
   SSL *ssl;
   struct addrinfo *res;
   struct pollfd servfds;
+  int throttled, lastThrottled;
+  char isThrottled;
 } SSLConInfo;
 
 
-extern int clientInit_ssl(const char *addr, const char *port, SSLConInfo *conInfo);
+extern int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *conInfo);
 
-extern int clientRead(SSLConInfo *conInfo, char *buffer, size_t len);
+extern int connection_client_read(SSLConInfo *conInfo, char *buffer, size_t len);
 
-extern int clientWrite(SSLConInfo *conInfo, char *buffer, size_t len);
+extern int connection_client_poll(SSLConInfo *conInfo, int event, int *ret);
 
-extern int clientPoll(SSLConInfo *conInfo, int event, int *ret);
+extern int connection_client_init(const char *addr, const char *port, struct addrinfo **res);
 
-extern int getConnectionInfo(const char *addr, const char *port, struct addrinfo **results);
-
-extern int socketConnect(int sockfd, struct addrinfo *res);
-
-extern int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo *));
-
-extern int clientInit(const char *addr, const char *port, struct addrinfo **res);
-
-extern int sendAll(SSLConInfo *conInfo, char *data, size_t len);
+extern int connection_client_send(SSLConInfo *conInfo, char *data, size_t len);
 
 #endif // __CONNECTION_H__

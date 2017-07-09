@@ -14,8 +14,8 @@ typedef struct IrcMsg {
   char *msgTok[MAX_PARAMETERS];
 } IrcMsg;
 
-extern IrcMsg *newMsg(char *input, HashTable *cmdTable, BotCmd **cmd);
+extern IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, BotCmd **cmd);
 
-extern IrcMsg *servMsg(char *input);
+extern IrcMsg *ircMsg_server_new(char *input);
 
 #endif

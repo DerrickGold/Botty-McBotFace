@@ -26,6 +26,7 @@ typedef struct IrcInfo {
   char server[MAX_SERV_LEN];
   char channel[MAX_CHAN_LEN];
 } IrcInfo;
+
 typedef int (*BotProcessFn)(void *, void *);
 
 typedef struct BotProcess {
@@ -44,7 +45,7 @@ typedef struct BotInfo {
   char ident[10];
   char realname[64];
   char master[30];
-  
+
   //connection state info
   char recvbuf[MAX_MSG_LEN];
   char *line, *line_off;
@@ -62,9 +63,11 @@ typedef struct BotInfo {
 } BotInfo;
 
 
-extern int irc_init(void);
+extern int bot_irc_init(void);
 
-extern void irc_cleanup(void);
+extern void bot_irc_cleanup(void);
+
+extern int bot_irc_send(SSLConInfo *conInfo, char *msg);
 
 extern int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
@@ -88,11 +91,9 @@ extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, Comman
 
 extern int bot_run(BotInfo *info);
 
-extern int ircSend(SSLConInfo *conInfo, char *msg);
+extern int bot_send(BotInfo *info, char *target, char *action, char *ctcp, char *msg, ...);
 
-extern int botSend(BotInfo *info, char *target, char *action, char *ctcp, char *msg, ...);
-
-extern int ctcpSend(BotInfo *info, char *target, char *command, char *msg, ...);
+extern int bot_ctcp_send(BotInfo *info, char *target, char *command, char *msg, ...);
 
 extern void bot_regName(BotInfo *bot, char *nick);
 
@@ -101,5 +102,7 @@ extern void bot_rmName(BotInfo *bot, char *nick);
 extern void bot_purgeNames(BotInfo *bot);
 
 extern void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data));
+
+extern int bot_isThrottled(BotInfo *bot);
 
 #endif //__IRC_H__

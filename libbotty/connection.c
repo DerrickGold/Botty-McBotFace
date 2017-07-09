@@ -7,29 +7,24 @@
 #include "connection.h"
 
 static int setNonBlock(int fd, char value) {
-  int flags = fcntl(fd, F_GETFL, 0);
-  if (flags < 0) {
-    return errno;
-  }
-  if (value) {
-    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  }
-  return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        return errno;
+
+    if (value)
+        return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 }
 
 /*
  * Some nice wrappers for connecting to a specific address and port.
  */
-int getConnectionInfo(const char *addr, const char *port, struct addrinfo **results) {
+static int getConnectionInfo(const char *addr, const char *port, struct addrinfo **results) {
   struct addrinfo hints;
-  
+
   memset(&hints, 0, sizeof(hints));
-#if defined(USE_OPENSSL)
   hints.ai_family = AF_INET;
-#else
-  hints.ai_family = AF_UNSPEC;
-#endif
-  
   hints.ai_socktype = SOCK_STREAM;
   if (addr == NULL)
     return -1;
@@ -43,18 +38,10 @@ int getConnectionInfo(const char *addr, const char *port, struct addrinfo **resu
   return 0;
 }
 
-int socketConnect(int sockfd, struct addrinfo *res) {
-  if (connect(sockfd, res->ai_addr, res->ai_addrlen)) {
-    close(sockfd);
-    fprintf(stderr, "connect: %s\n", strerror(errno));
-    return -1;
-  }
-  //  setNonBlock(sockfd, 1)
-    return 0;
-  
-  //  setNonBlock(sockfd, 1);  
-  int r = connect(sockfd, res->ai_addr, res->ai_addrlen);
+static int socketConnect(int sockfd, struct addrinfo *res) {
+  setNonBlock(sockfd, 1);
 
+  int r = connect(sockfd, res->ai_addr, res->ai_addrlen);
   if (r < 0 && (errno == EWOULDBLOCK || errno == EAGAIN)) {
     struct pollfd pfd;
     pfd.fd = sockfd;
@@ -63,21 +50,19 @@ int socketConnect(int sockfd, struct addrinfo *res) {
       r = poll(&pfd, 1, 100);
     }
 
-    /*if (pfd.revents != POLLOUT) {
-      fprintf(stderr, "connect: %s\n", strerror(errno));
-      close(sockfd);
-      return -1;
-      }*/
-  } else if (r) {
-   fprintf(stderr, "connect: %s\n", strerror(errno));
-   close(sockfd);
-   return -1;
+    if (r != POLLOUT) {
+        close(sockfd);
+        fprintf(stderr, "connect: %s: %d\n", strerror(errno), errno);
+    }
   }
+
+
+  fprintf(stderr, "done: %s: %d\n", strerror(errno), errno);
   return 0;
 }
 
 
-int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo *)) {
+static int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo *)) {
   struct addrinfo *p = NULL;
   int sockfd = -1;
 
@@ -85,7 +70,7 @@ int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo *)) {
     fprintf(stderr, "No socket initialization action provided.\n");
     return -1;
   }
-  
+
   for (p = res; p != NULL; p = p->ai_next) {
     if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
       perror("socket error: ");
@@ -107,7 +92,7 @@ int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo *)) {
 /*
  * Initialize the client networking by making a connection to the specified server.
  */
-int clientInit(const char *addr, const char *port, struct addrinfo **res) {
+int connection_client_init(const char *addr, const char *port, struct addrinfo **res) {
   if (getConnectionInfo(addr, port, res)) return -1;
 
   int sockfd = -1;
@@ -119,33 +104,17 @@ int clientInit(const char *addr, const char *port, struct addrinfo **res) {
   return sockfd;
 }
 
-
-int sendAll(SSLConInfo *conInfo, char *data, size_t len) {
-  size_t total = 0, bytesLeft = len;
-  int n = 0;
-  while (total < len) {
-    n = clientWrite(conInfo, data+total, bytesLeft);
-    if (n == -1) break;
-    total += n;
-    bytesLeft -= n;
-  }
-  return n==-1?-1:0;
-}
-
-
-int clientInit_ssl(const char *addr, const char *port, SSLConInfo *conInfo) {
+int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *conInfo) {
   SSL_load_error_strings();
   SSL_library_init();
   conInfo->ctx = SSL_CTX_new(SSLv23_client_method());
   if (conInfo->ctx == NULL)
     ERR_print_errors_fp(stderr);
-    
+
   fprintf(stderr, "Starting TCP Connection...\n");
-  conInfo->socket = clientInit(addr, port, &conInfo->res);
+  conInfo->socket = connection_client_init(addr, port, &conInfo->res);
   if (conInfo->socket < 0) return -1;
 
-  //  setNonBlock(conInfo->socket, 1);
-  
   fprintf(stderr, "Starting SSL Connection\n");
   conInfo->ssl = SSL_new(conInfo->ctx);
   if (!conInfo->ssl) {
@@ -163,6 +132,8 @@ int clientInit_ssl(const char *addr, const char *port, SSLConInfo *conInfo) {
   SSL_set_connect_state(conInfo->ssl);
   int r = 0;
   int events = POLLIN | POLLOUT | POLLERR;
+  conInfo->servfds.fd = conInfo->socket;
+
   while ((r = SSL_do_handshake(conInfo->ssl)) != 1) {
     int err = SSL_get_error(conInfo->ssl, r);
     if (err == SSL_ERROR_WANT_WRITE) {
@@ -179,7 +150,6 @@ int clientInit_ssl(const char *addr, const char *port, SSLConInfo *conInfo) {
       return -1;
     }
 
-    conInfo->servfds.fd = conInfo->socket;
     conInfo->servfds.events = events;
     do {
       r = poll(&conInfo->servfds, 1, 100);
@@ -191,29 +161,69 @@ int clientInit_ssl(const char *addr, const char *port, SSLConInfo *conInfo) {
     }
   }
 
+  //  setNonBlock(conInfo->socket, 1);
   fprintf(stderr, "SSL Connection Successful!\n");
   return 0;
 }
 
-int clientRead(SSLConInfo *conInfo, char *buffer, size_t len) {
-#if defined(USE_OPENSSL)
+static int clientWrite(SSLConInfo *conInfo, char *buffer, size_t len) {
+  if (!conInfo->enableSSL)
+    return send(conInfo->servfds.fd, buffer, len, 0);
+
+  return  SSL_write(conInfo->ssl, buffer, len);
+}
+
+int connection_client_send(SSLConInfo *conInfo, char *data, size_t len) {
+  size_t total = 0, bytesLeft = len;
+  int n = 0;
+  while (total < len) {
+    n = clientWrite(conInfo, data+total, bytesLeft);
+    if (n == -1) break;
+    total += n;
+    bytesLeft -= n;
+  }
+  return n==-1?-1:0;
+}
+
+
+int connection_client_read(SSLConInfo *conInfo, char *buffer, size_t len) {
+  if (!conInfo->enableSSL)
+    return recv(conInfo->servfds.fd, buffer, len, 0);
+
   return SSL_read(conInfo->ssl, buffer, len);
-#else
-  return recv(conInfo->servfds.fd, buffer, len, 0);    
-#endif
+
+  int rd = 0, r = 1;
+  while (rd < len && r) {
+    struct pollfd pfd = {};
+    pfd.fd = conInfo->socket;
+    pfd.events = POLLIN;
+    do {
+      r = poll(&pfd, 1, POLL_TIMEOUT_MS);
+    }  while (r==0);
+
+    r = SSL_read(conInfo->ssl, buffer+rd, len - rd);
+    if (r < 0) {
+      int err = SSL_get_error(conInfo->ssl, r);
+      if (err == SSL_ERROR_WANT_READ) {
+        continue;
+      } else if (err == SSL_ERROR_ZERO_RETURN) {
+        //client disconnected
+        return 0;
+      }
+      ERR_print_errors_fp (stderr);
+    }
+    rd += r;
+  }
+  return rd;
 }
 
-int clientWrite(SSLConInfo *conInfo, char *buffer, size_t len) {
-#if defined(USE_OPENSSL)
-  return SSL_write(conInfo->ssl, buffer, len);
-#else
-  return send(conInfo->servfds.fd, buffer, len, 0);
-#endif
-}
-
-
-int clientPoll(SSLConInfo *conInfo, int event, int *ret) {
+int connection_client_poll(SSLConInfo *conInfo, int event, int *ret) {
+  if (conInfo->enableSSL) {
+    *ret = 1;
+    return 1;
+  }
   return ((*ret = poll(&conInfo->servfds, 1, POLL_TIMEOUT_MS)) && conInfo->servfds.revents & event);
 }
+
 
 

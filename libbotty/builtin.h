@@ -4,8 +4,8 @@
 #include "irc.h"
 #include "cmddata.h"
 
-extern int botcmd_builtin(BotInfo *bot);
+int botcmd_builtin(BotInfo *bot);
 
-extern char *botcmd_builtin_getTarget(CmdData *data);
+char *botcmd_builtin_getTarget(CmdData *data);
 
 #endif //__BUILTIN_H__

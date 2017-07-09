@@ -63,46 +63,46 @@ typedef struct BotInfo {
 } BotInfo;
 
 
-extern int bot_irc_init(void);
+int bot_irc_init(void);
 
-extern void bot_irc_cleanup(void);
+void bot_irc_cleanup(void);
 
-extern int bot_irc_send(SSLConInfo *conInfo, char *msg);
+int bot_irc_send(SSLConInfo *conInfo, char *msg);
 
-extern int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
+int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
-extern int bot_connect(BotInfo *info);
+int bot_connect(BotInfo *info);
 
-extern char *bot_getNick(BotInfo *bot);
+char *bot_getNick(BotInfo *bot);
 
-extern void bot_cleanup(BotInfo *info);
+void bot_cleanup(BotInfo *info);
 
-extern void bot_setProcess(BotInfo *bot, BotProcessFn fn, void *args);
+void bot_setProcess(BotInfo *bot, BotProcessFn fn, void *args);
 
-extern void bot_clearProcess(BotInfo *bot);
+void bot_clearProcess(BotInfo *bot);
 
-extern void bot_runProcess(BotInfo *bot);
+void bot_runProcess(BotInfo *bot);
 
-extern int bot_isProcessing(BotInfo *bot);
+int bot_isProcessing(BotInfo *bot);
 
-extern void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
+void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
 
-extern void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
+void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
 
-extern int bot_run(BotInfo *info);
+int bot_run(BotInfo *info);
 
-extern int bot_send(BotInfo *info, char *target, char *action, char *ctcp, char *msg, ...);
+int bot_send(BotInfo *info, char *target, char *action, char *ctcp, char *msg, ...);
 
-extern int bot_ctcp_send(BotInfo *info, char *target, char *command, char *msg, ...);
+int bot_ctcp_send(BotInfo *info, char *target, char *command, char *msg, ...);
 
-extern void bot_regName(BotInfo *bot, char *nick);
+void bot_regName(BotInfo *bot, char *nick);
 
-extern void bot_rmName(BotInfo *bot, char *nick);
+void bot_rmName(BotInfo *bot, char *nick);
 
-extern void bot_purgeNames(BotInfo *bot);
+void bot_purgeNames(BotInfo *bot);
 
-extern void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data));
+void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data));
 
-extern int bot_isThrottled(BotInfo *bot);
+int bot_isThrottled(BotInfo *bot);
 
 #endif //__IRC_H__

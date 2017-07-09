@@ -25,14 +25,14 @@ typedef struct SSLConInfo {
 } SSLConInfo;
 
 
-extern int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *conInfo);
+int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *conInfo);
 
-extern int connection_client_read(SSLConInfo *conInfo, char *buffer, size_t len);
+int connection_client_read(SSLConInfo *conInfo, char *buffer, size_t len);
 
-extern int connection_client_poll(SSLConInfo *conInfo, int event, int *ret);
+int connection_client_poll(SSLConInfo *conInfo, int event, int *ret);
 
-extern int connection_client_init(const char *addr, const char *port, struct addrinfo **res);
+int connection_client_init(const char *addr, const char *port, struct addrinfo **res);
 
-extern int connection_client_send(SSLConInfo *conInfo, char *data, size_t len);
+int connection_client_send(SSLConInfo *conInfo, char *data, size_t len);
 
 #endif // __CONNECTION_H__

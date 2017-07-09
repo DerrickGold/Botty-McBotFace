@@ -62,7 +62,7 @@ typedef enum {
   API_ACTION_COUNT
 } IRC_API_Actions;
 
-extern const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN];
-extern HashTable *IrcApiActions;
+const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN];
+HashTable *IrcApiActions;
 
 #endif //__GLOBALS_H__

@@ -16,14 +16,14 @@ typedef struct BotCmd {
 
 typedef int (*CommandFn)(void *, char *a[MAX_BOT_ARGS]);
 
-extern int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandFn fn);
+int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandFn fn);
 
-extern BotCmd *command_get(HashTable *cmdTable, char *command);
+BotCmd *command_get(HashTable *cmdTable, char *command);
 
-extern int command_call_r(BotCmd *cmd, void *data, char *args[MAX_BOT_ARGS]);
+int command_call_r(BotCmd *cmd, void *data, char *args[MAX_BOT_ARGS]);
 
-extern int command_call(HashTable *cmdTable, char *command, void *data, char *args[MAX_BOT_ARGS]);
+int command_call(HashTable *cmdTable, char *command, void *data, char *args[MAX_BOT_ARGS]);
 
-extern void command_cleanup(HashTable *cmdTable);
+void command_cleanup(HashTable *cmdTable);
 
 #endif //__COMMANDS_H__

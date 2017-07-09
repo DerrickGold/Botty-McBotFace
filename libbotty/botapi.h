@@ -8,9 +8,9 @@
 #include "irc.h"
 #include "cmddata.h"
 
-extern int botty_init(BotInfo *bot, int argc, char *argv[], int argstart);
+int botty_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
-extern void botty_cleanup(BotInfo *bot);
+void botty_cleanup(BotInfo *bot);
 
 //returns void
 #define botty_addCommand(bot, cmd, flags, args, fn) \

@@ -15,9 +15,9 @@
  *===================================================*/
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
-    .port     = "6697",
-    .server   = "irc.freenode.org",
-    .channel  = "#palib"
+    .port     = "6667",
+    .server   = "CHANGE_THIS",
+    .channel  = "#CHANGE_THIS"
   },
   .conInfo = (SSLConInfo) {
     .enableSSL = 1,
@@ -26,7 +26,7 @@ BotInfo conInfo = {
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "BassAceGold",
+  .master   = "Derrick",
 };
 /*=====================================================
  * Mailbox Structures and Methods

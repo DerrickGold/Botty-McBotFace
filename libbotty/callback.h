@@ -18,12 +18,12 @@ typedef enum {
 
 typedef int(*Callback)(void *, IrcMsg *);
 
-extern void callback_set_r(Callback collection[CALLBACK_COUNT], BotCallbackID id, Callback fn);
-extern void callback_set(BotCallbackID id, Callback fn);
+void callback_set_r(Callback collection[CALLBACK_COUNT], BotCallbackID id, Callback fn);
+void callback_set(BotCallbackID id, Callback fn);
 
 
-extern int callback_call_r(Callback collection[CALLBACK_COUNT], BotCallbackID id, void *data, IrcMsg *msg);
-extern int callback_call(BotCallbackID id, void *data, IrcMsg *msg);
+int callback_call_r(Callback collection[CALLBACK_COUNT], BotCallbackID id, void *data, IrcMsg *msg);
+int callback_call(BotCallbackID id, void *data, IrcMsg *msg);
 
 
 #endif //__CALLBACK_H__

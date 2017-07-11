@@ -25,6 +25,12 @@
 #define ACTION_EMPTY ""
 #define POLL_TIMEOUT_MS 100
 #define REGISTER_TIMEOUT_SEC 5
+#define SCRIPTS_DIR "scripts/"
+#define SCRIPT_OUTPUT_REDIRECT " 2>&1"
+
+#define ONE_SEC_IN_NS 999999999
+#define MSG_PER_SECOND_LIM 1
+#define THROTTLE_WAIT_SEC 3
 
 #define THROTTLE_NEEDLE "throttl"
 

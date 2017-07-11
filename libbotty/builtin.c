@@ -54,6 +54,89 @@ static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
   return -1;
 }
 
+//A sample 'process' function that can be given to the bot
+static int _script(void *b, void *args) {
+  BotInfo *bot = (BotInfo *)b;
+  FILE *input = (FILE *)args;
+  char buf[MAX_MSG_LEN];
+  static char throttleBuf[MAX_MSG_LEN];
+
+  struct timespec sleepTimer = {
+    .tv_sec = 0,
+    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
+  };
+
+  struct timespec throttleTimer = {
+    .tv_sec = THROTTLE_WAIT_SEC,
+    .tv_nsec = 0
+  };
+
+  if (feof(input))
+    goto _fin;
+
+  if (botty_isThrottled(bot)) {
+    fprintf(stderr, "Sleeping due to throttling\n");
+    nanosleep(&throttleTimer, NULL);
+    if (botty_say(bot, NULL, ". %s", throttleBuf) < 0)
+      goto _fin;
+  }
+  else {
+    int ret = 0;
+    if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret))
+      return 1;
+
+    char *s = fgets(buf, MAX_MSG_LEN, input);
+    if (!s)
+      goto _fin;
+
+    char *newline = strchr(s, '\n');
+    if (newline) *newline = '\0';
+    memset(throttleBuf, 0, sizeof(throttleBuf));
+    memcpy(throttleBuf, buf, sizeof(buf));
+    //strncpy(throttleBuf, s, MAX_MSG_LEN);
+
+    if (botty_say(bot, NULL, ". %s", s) < 0)
+      goto _fin;
+  }
+
+  nanosleep(&sleepTimer, NULL);
+  //return 1 to keep the process going
+  return 1;
+
+  _fin:
+  //return negative value to indicate the process
+  //is complete
+  pclose(input);
+  return -1;
+}
+
+int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)i;
+  char fullCmd[MAX_MSG_LEN + strlen(SCRIPTS_DIR) + strlen(SCRIPT_OUTPUT_REDIRECT)];
+  char *cmd = args[1];
+  if (!cmd) {
+    botty_say(data->bot, NULL, "%s: please specify a command.", data->msg->nick);
+    return 0;
+  }
+
+  if (cmd[0] == '.' || cmd[0] == '~' || cmd[0] == '\'' || cmd[0] == '\"') {
+    botty_say(data->bot, NULL, "%s: invalid command specified.", data->msg->nick);
+    return 0;
+  }
+
+  snprintf(fullCmd, sizeof(fullCmd), SCRIPTS_DIR"%s"SCRIPT_OUTPUT_REDIRECT, cmd);
+  FILE *f = popen(fullCmd, "r");
+  if (!f) {
+    botty_say(data->bot, NULL, "Script '%s' does not exist!", cmd);
+    return 0;
+  }
+  //initialize and start the draw process
+  //A process will block all input for a given bot until
+  //it has completed the assigned process.
+  bot_setProcess(data->bot, &_script, (void*)f);
+  return 0;
+}
+
 /*
  * If necessary, returns where the bot received its input
  * as to respond in the appropriate place.
@@ -78,5 +161,6 @@ int botcmd_builtin(BotInfo *bot) {
   bot_addcommand(bot, "info", 0, 1, &botcmd_builtin_info);
   bot_addcommand(bot, "source", 0, 1, &botcmd_builtin_source);
   bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_builtin_die);
+  bot_addcommand(bot, "script", 0, 2, &botcmd_builtin_script);
   return 0;
 }

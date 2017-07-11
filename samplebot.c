@@ -8,16 +8,14 @@
 
 #include "botapi.h"
 
-#define MAX_NS 999999999
-
 /*=====================================================
  * Bot Configuration
  *===================================================*/
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
-    .port     = "6667",
-    .server   = "CHANGE_THIS",
-    .channel  = "#CHANGE_THIS"
+    .port     = "6697",
+    .server   = "irc.freenode.org",
+    .channel  = "#derrick_bot_test"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
@@ -276,8 +274,6 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
 
 //A sample 'process' function that can be given to the bot
 static int _draw(void *b, void *args) {
-  #define MAX_NS 999999999
-
   BotInfo *bot = (BotInfo *)b;
   FILE *input = (FILE *)args;
   char buf[MAX_MSG_LEN];
@@ -285,11 +281,11 @@ static int _draw(void *b, void *args) {
 
   struct timespec sleepTimer = {
     .tv_sec = 0,
-    .tv_nsec = MAX_NS
+    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
   };
 
   struct timespec throttleTimer = {
-    .tv_sec = 3,
+    .tv_sec = THROTTLE_WAIT_SEC,
     .tv_nsec = 0
   };
 
@@ -390,7 +386,7 @@ int main(int argc, char *argv[]) {
   //process input 30 times per second
   struct timespec sleepTimer = {
     .tv_sec = 0,
-    .tv_nsec = MAX_NS/30
+    .tv_nsec = ONE_SEC_IN_NS/30
   };
   while (((status = botty_process(&conInfo)) >= 0)) {
     //prevent 100% cpu usage

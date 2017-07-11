@@ -1,6 +1,6 @@
 SHELL=/bin/bash
 CC=gcc
-LDFLAGS=-F/usr/local/opt/openssl/lib -lcrypto -lssl
+LDFLAGS=-L/usr/local/opt/openssl/lib -lcrypto -lssl
 CFLAGS=-Wall -g -std=gnu99 -I/usr/local/opt/openssl/include -DUSE_OPENSSL
 LDLIBS=-lm
 

@@ -176,9 +176,9 @@ static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   }
   //store all current users in the channel
   else if (!strncmp(msg->action, NAME_REPLY, strlen(NAME_REPLY))) {
-    char *start = msg->msgTok[1], *next = start, *end = start + strlen(start) - 1;
+    char *start = msg->msgTok[1], *next = start, *end = start + strlen(start);
     while (start < end) {
-      while (*next != BOT_ARG_DELIM && next < end) next++;
+      while (*next != BOT_ARG_DELIM && next <= end) next++;
       *next = '\0';
       bot_regName(bot, start);
       fprintf(stdout, "Registered nick: %s\n", start);
@@ -263,6 +263,15 @@ int bot_parse(BotInfo *bot, char *line) {
     return 0;
   }
 
+  if (!bot->joined && bot->startTime.tv_sec != 0) {
+      struct timeval current = {};
+      gettimeofday(&current, NULL);
+      if(current.tv_sec - bot->startTime.tv_sec >= REGISTER_TIMEOUT_SEC) {
+        bot->state = CONSTATE_REGISTERED;
+        gettimeofday(&bot->startTime, NULL);
+      }
+  }
+
   if ((servStat = parseServer(bot, line)) < 0) return servStat;
 
   switch (bot->state) {
@@ -284,6 +293,7 @@ int bot_parse(BotInfo *bot, char *line) {
     bot_irc_send(&bot->conInfo, sysBuf);
     snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", bot->ident, bot->host, bot->realname);
     bot_irc_send(&bot->conInfo, sysBuf);
+    gettimeofday(&bot->startTime, NULL);
     //go to listening state to wait for registration confirmation
     bot->state = CONSTATE_LISTENING;
     break;
@@ -294,6 +304,7 @@ int bot_parse(BotInfo *bot, char *line) {
     bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
+    bot->joined = 1;
     callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, NULL);
     bot->state = CONSTATE_LISTENING;
     break;
@@ -395,7 +406,7 @@ int bot_connect(BotInfo *bot) {
 
   bot->state = CONSTATE_NONE;
 
-  if (bot->conInfo.enableSSL) {
+  if (bot->useSSL) {
     if (connection_ssl_client_init(bot->info->server, bot->info->port, &bot->conInfo))
       exit(1);
 
@@ -514,6 +525,9 @@ void bot_regName(BotInfo *bot, char *nick) {
     exit(1);
   }
 
+  size_t diff = strcspn(nick, ILLEGAL_NICK_CHARS);
+  nick += (diff == 0);
+  fprintf(stderr, "Registering Nick: %s\n", nick);
   strncpy(newNick->nick, nick, MAX_NICK_LEN);
   if (!bot->names) {
     //first name
@@ -530,8 +544,9 @@ void bot_rmName(BotInfo *bot, char *nick) {
   NickList *curNick, *lastNick;
 
   curNick = bot->names;
-
+  lastNick = curNick;
   while (curNick && strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
+    fprintf(stderr, "Matching: %s with %s\n", curNick->nick, nick);
     lastNick = curNick;
     curNick = curNick->next;
   }

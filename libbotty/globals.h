@@ -12,6 +12,7 @@
 #define MSG_LEN_EXCEED \
   "Message length exceeds %d byte limit. Message splitting not supported yet\n"
 
+#define ILLEGAL_NICK_CHARS "-&@+%"
 #define SERVER_PREFIX "irc."
 #define CMD_CHAR '~'
 #define PARAM_DELIM ':'
@@ -23,6 +24,7 @@
 #define ACTION_MSG "PRIVMSG"
 #define ACTION_EMPTY ""
 #define POLL_TIMEOUT_MS 100
+#define REGISTER_TIMEOUT_SEC 5
 
 #define THROTTLE_NEEDLE "throttl"
 

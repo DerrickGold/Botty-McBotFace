@@ -2,6 +2,7 @@
 #define __IRC_H__
 
 #include <stdarg.h>
+#include <time.h>
 #include "globals.h"
 #include "commands.h"
 #include "callback.h"
@@ -45,6 +46,8 @@ typedef struct BotInfo {
   char ident[10];
   char realname[64];
   char master[30];
+  char useSSL;
+  char joined;
 
   //connection state info
   char recvbuf[MAX_MSG_LEN];
@@ -58,6 +61,7 @@ typedef struct BotInfo {
 
   BotProcess process;
   SSLConInfo conInfo;
+  struct timeval startTime;
   //some pointer the user can use
   void *data;
 } BotInfo;

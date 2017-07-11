@@ -108,6 +108,8 @@ int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *c
   SSL_load_error_strings();
   SSL_library_init();
   conInfo->ctx = SSL_CTX_new(SSLv23_client_method());
+  conInfo->enableSSL = 1;
+
   if (conInfo->ctx == NULL)
     ERR_print_errors_fp(stderr);
 

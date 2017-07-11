@@ -19,14 +19,12 @@ BotInfo conInfo = {
     .server   = "CHANGE_THIS",
     .channel  = "#CHANGE_THIS"
   },
-  .conInfo = (SSLConInfo) {
-    .enableSSL = 1,
-  },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "Derrick",
+  .master   = "BassAceGold",
+  .useSSL   = 1
 };
 /*=====================================================
  * Mailbox Structures and Methods

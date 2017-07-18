@@ -263,15 +263,6 @@ int bot_parse(BotInfo *bot, char *line) {
     return 0;
   }
 
-  if (!bot->joined && bot->startTime.tv_sec != 0) {
-      struct timeval current = {};
-      gettimeofday(&current, NULL);
-      if(current.tv_sec - bot->startTime.tv_sec >= REGISTER_TIMEOUT_SEC) {
-        bot->state = CONSTATE_REGISTERED;
-        gettimeofday(&bot->startTime, NULL);
-      }
-  }
-
   if ((servStat = parseServer(bot, line)) < 0) return servStat;
 
   switch (bot->state) {
@@ -484,6 +475,15 @@ int bot_run(BotInfo *bot) {
   bot->conInfo.isThrottled = (bot->conInfo.throttled != bot->conInfo.lastThrottled);
   bot->conInfo.lastThrottled = bot->conInfo.throttled;
 
+  if (!bot->joined && bot->startTime.tv_sec != 0) {
+    struct timeval current = {};
+    gettimeofday(&current, NULL);
+    if(current.tv_sec - bot->startTime.tv_sec >= REGISTER_TIMEOUT_SEC) {
+      bot->state = CONSTATE_REGISTERED;
+      gettimeofday(&bot->startTime, NULL);
+    }
+  }
+
   bot_runProcess(bot);
 
   //process all input first before receiving more
@@ -552,7 +552,7 @@ void bot_rmName(BotInfo *bot, char *nick) {
   }
 
   //make sure the node we stopped on is the right one
-  if (!strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
+  if (curNick && !strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
     if (bot->names == curNick) bot->names = curNick->next;
     else lastNick->next = curNick->next;
     free(curNick);
@@ -565,7 +565,7 @@ void bot_purgeNames(BotInfo *bot) {
   NickList *curNick = bot->names, *next;
   while (curNick) {
     next = curNick->next;
-    free(next);
+    free(curNick);
     curNick = next;
   }
   bot->names = NULL;

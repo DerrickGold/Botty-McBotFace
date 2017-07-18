@@ -14,14 +14,14 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "irc.freenode.org",
-    .channel  = "#derrick_bot_test"
+    .server   = "CHANGE_THIS",
+    .channel  = "#CHANGETHIS"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "BassAceGold",
+  .master   = "Derrick",
   .useSSL   = 1
 };
 /*=====================================================

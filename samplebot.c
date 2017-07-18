@@ -14,8 +14,8 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "CHANGE_THIS",
-    .channel  = "#CHANGETHIS"
+    .server   = "CHANGE ME",
+    .channel  = "#CHANGE ME"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
@@ -68,6 +68,33 @@ static void mailNotify(BotInfo *bot, char *nick) {
   }
 }
 /*=====================================================
+ * Link History Structures and Methods
+ *===================================================*/
+#define LINKS_STORE_MAX 5
+#define URL_IDENTIFIER_HTTP "http:"
+#define URL_IDENTIFIER_HTTPS "https:"
+#define URL_IDENTIFIER_WWW "www."
+
+typedef struct LinkNode {
+  char url[MAX_MSG_LEN];
+  struct LinkNode *next;
+} LinkNode;
+
+typedef struct LinksHead {
+  LinkNode *head;
+  int count;
+  LinkNode *lastPos;
+} LinksHead;
+
+LinksHead ListOfLinks = {};
+
+char *links_msgContainsLink(char *input);
+char links_store(LinksHead *head, char *input);
+int links_print_process(void *b, void *args);
+int links_print(void *i, char *args[MAX_BOT_ARGS]);
+void links_purge(LinksHead *list);
+
+/*=====================================================
  * Bot Callback functions
  *===================================================*/
 /*
@@ -89,6 +116,7 @@ static int onMsg(void *data, IrcMsg *msg) {
 
   printf("Recieved msg from %s in %s: %s\n", msg->nick, msg->channel, msg->msg);
   mailNotify((BotInfo *)data, msg->nick);
+  links_store(&ListOfLinks, msg->msg);
   return 0;
 }
 
@@ -380,6 +408,7 @@ int main(int argc, char *argv[]) {
   botty_addCommand(&conInfo, "msg", 0, 3, &botcmd_msg);
   botty_addCommand(&conInfo, "mail", 0, 1, &botcmd_mail);
   botty_addCommand(&conInfo, "draw", 0, 2, &botcmd_draw);
+  botty_addCommand(&conInfo, "links", 0, 1, &links_print);
 
   botty_connect(&conInfo);
 
@@ -395,6 +424,7 @@ int main(int argc, char *argv[]) {
   botty_cleanup(&conInfo);
 
   destroyAllMailBoxes();
+  links_purge(&ListOfLinks);
   return status;
 }
 
@@ -554,4 +584,113 @@ void readMail(BotInfo *bot, char *nick) {
   box->count--;
 }
 
+/*=====================================================
+ * Links implementation
+ *
+ *===================================================*/
 
+char *links_msgContainsLink(char *input) {
+
+  char *url = strstr(input, URL_IDENTIFIER_HTTP);
+  if (url) return url;
+
+  url = strstr(input, URL_IDENTIFIER_HTTPS);
+  if (url) return url;
+
+  url = strstr(input, URL_IDENTIFIER_WWW);
+  return url;
+}
+
+char links_store(LinksHead *head, char *input) {
+  fprintf(stderr, "Checking message for link: %s\n", input);
+  char *start = links_msgContainsLink(input);
+  fprintf(stderr, "Link found at: %s\nGetting end of string...\n", start);
+  if (!head || !start) return 0;
+
+  char *end = start;
+  while (*end != ' ' && *end != '\0' && *end != '\n' && *end != '\r') end++;
+  fprintf(stdout, "URL Found!\n");
+
+  LinkNode *newNode = NULL;
+  if (head->count < LINKS_STORE_MAX) {
+    newNode = calloc(1, sizeof(LinkNode));
+    fprintf(stderr, "Making new node\n");
+  } else {
+    fprintf(stderr, "Recycling old node\n");
+    newNode = head->head;
+    LinkNode *prevNode = newNode;
+    while (newNode->next){
+      prevNode = newNode;
+      newNode = newNode->next;
+    }
+    prevNode->next = NULL;
+  }
+  memset(newNode->url, 0, MAX_MSG_LEN);
+  strncpy(newNode->url, start, (end - start));
+  fprintf(stdout, "Storing url: %s\n", newNode->url);
+
+  if (!head->head && head->count == 0) {
+    head->head = newNode;
+    head->count++;
+  }
+  else if (head->count < LINKS_STORE_MAX) {
+    LinkNode *insert = head->head;
+    while (insert->next) insert = insert->next;
+    insert->next = newNode;
+    head->count++;
+  } else {
+    newNode->next = head->head;
+    head->head = newNode;
+  }
+
+  return 0;
+}
+
+
+
+int links_print_process(void *b, void *args) {
+  BotInfo *bot = (BotInfo *)b;
+  LinksHead *listData = (LinksHead *)args;
+
+  struct timespec sleepTimer = {
+    .tv_sec = 0,
+    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
+  };
+
+  if (!listData->lastPos)
+    goto _fin;
+
+  if (botty_say(bot, NULL, ". %s", listData->lastPos->url) < 0)
+    goto _fin;
+
+  listData->lastPos = listData->lastPos->next;
+  nanosleep(&sleepTimer, NULL);
+  //return 1 to keep the process going
+  return 1;
+
+  _fin:
+  return -1;
+}
+
+int links_print(void *i, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)i;
+  if (ListOfLinks.count == 0) {
+    botty_say(data->bot, NULL, "%s: There is no link history to post.", data->msg->nick);
+    return 0;
+  }
+  ListOfLinks.lastPos = ListOfLinks.head;
+  botty_say(data->bot, NULL, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
+  bot_setProcess(data->bot, &links_print_process, (void*)&ListOfLinks);
+  return 0;
+}
+
+void links_purge(LinksHead *list) {
+  if (!list || !list->head) return;
+  LinkNode *current = list->head;
+  while (current->next) {
+    LinkNode *next = current->next;
+    free(current);
+    current = next;
+  }
+  memset(list, 0, sizeof(LinksHead));
+}

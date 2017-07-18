@@ -602,21 +602,16 @@ char *links_msgContainsLink(char *input) {
 }
 
 char links_store(LinksHead *head, char *input) {
-  fprintf(stderr, "Checking message for link: %s\n", input);
   char *start = links_msgContainsLink(input);
-  fprintf(stderr, "Link found at: %s\nGetting end of string...\n", start);
   if (!head || !start) return 0;
 
   char *end = start;
   while (*end != ' ' && *end != '\0' && *end != '\n' && *end != '\r') end++;
-  fprintf(stdout, "URL Found!\n");
 
   LinkNode *newNode = NULL;
   if (head->count < LINKS_STORE_MAX) {
     newNode = calloc(1, sizeof(LinkNode));
-    fprintf(stderr, "Making new node\n");
   } else {
-    fprintf(stderr, "Recycling old node\n");
     newNode = head->head;
     LinkNode *prevNode = newNode;
     while (newNode->next){
@@ -627,26 +622,17 @@ char links_store(LinksHead *head, char *input) {
   }
   memset(newNode->url, 0, MAX_MSG_LEN);
   strncpy(newNode->url, start, (end - start));
-  fprintf(stdout, "Storing url: %s\n", newNode->url);
-
   if (!head->head && head->count == 0) {
     head->head = newNode;
-    head->count++;
-  }
-  else if (head->count < LINKS_STORE_MAX) {
-    LinkNode *insert = head->head;
-    while (insert->next) insert = insert->next;
-    insert->next = newNode;
     head->count++;
   } else {
     newNode->next = head->head;
     head->head = newNode;
+    head->count += (head->count < LINKS_STORE_MAX);
   }
 
   return 0;
 }
-
-
 
 int links_print_process(void *b, void *args) {
   BotInfo *bot = (BotInfo *)b;

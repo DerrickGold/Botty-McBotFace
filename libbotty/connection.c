@@ -199,9 +199,8 @@ int connection_client_read(SSLConInfo *conInfo, char *buffer, size_t len) {
     struct pollfd pfd = {};
     pfd.fd = conInfo->socket;
     pfd.events = POLLIN;
-    do {
-      r = poll(&pfd, 1, POLL_TIMEOUT_MS);
-    }  while (r==0);
+    r = poll(&pfd, 1, POLL_TIMEOUT_MS);
+    if (r == 1) return 0;
 
     r = SSL_read(conInfo->ssl, buffer+rd, len - rd);
     if (r < 0) {

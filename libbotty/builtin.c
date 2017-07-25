@@ -16,6 +16,7 @@ typedef struct ScriptArgs {
 	char *target;
 } ScriptArgs;
 
+
 /*
  * If necessary, returns where the bot received its input
  * as to respond in the appropriate place.
@@ -182,8 +183,11 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
   	botty_say(data->bot, responseTarget, "%s: script does not exist.", data->msg->nick);
   	return 0;
   }
+  if (scriptArgs)
+	  snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s %s"SCRIPT_OUTPUT_REDIRECT, script, caller, scriptArgs);
+	else
+		snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s"SCRIPT_OUTPUT_REDIRECT, script, caller);
 
-  snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s %s"SCRIPT_OUTPUT_REDIRECT, script, caller, scriptArgs);
   FILE *f = popen(fullCmd, "r");
   if (!f) {
     botty_say(data->bot, responseTarget, "Script '%s' does not exist!", script);
@@ -196,13 +200,113 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
   	pclose(f);
   	return 0;
   }
-  //initialize and start the draw process
-  //A process will block all input for a given bot until
-  //it has completed the assigned process.
-  bot_setProcess(data->bot, &_script, (void*)sArgs);
+
+  bot_queueProcess(data->bot, &_script, (void*)sArgs, script, caller);
   return 0;
 }
 
+static int _listProcesses(void *b, void *args) {
+  BotInfo *bot = (BotInfo *)b;
+  BotProcessArgs *pArgs = (BotProcessArgs *)args;
+  BotProcess *proc = (BotProcess *)pArgs->data;
+  char *responseTarget = pArgs->target;
+
+  char buf[MAX_MSG_LEN];
+  static char throttleBuf[MAX_MSG_LEN];
+
+  struct timespec sleepTimer = {
+    .tv_sec = 0,
+    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
+  };
+
+  struct timespec throttleTimer = {
+    .tv_sec = THROTTLE_WAIT_SEC,
+    .tv_nsec = 0
+  };
+
+  if (!proc)
+    goto _fin;
+
+  if (botty_isThrottled(bot)) {
+    fprintf(stderr, "Sleeping due to throttling\n");
+    nanosleep(&throttleTimer, NULL);
+    if (botty_say(bot, responseTarget, ". %s", throttleBuf) < 0)
+      goto _fin;
+  }
+  else {
+    int ret = 0;
+    if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret))
+      return 1;
+
+    char *s = proc->details;
+    memset(throttleBuf, 0, sizeof(throttleBuf));
+    memcpy(throttleBuf, buf, sizeof(buf));
+    if (botty_say(bot, responseTarget, "%s", s) < 0)
+      goto _fin;
+  }
+
+  nanosleep(&sleepTimer, NULL);
+  pArgs->data = (void *)proc->next;
+  //return 1 to keep the process going
+  return 1;
+
+  _fin:
+  //return negative value to indicate the process
+  //is complete
+  bot_freeProcessArgs(pArgs, NULL);
+  return -1;
+}
+
+int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
+	CmdData *data = (CmdData *)i;
+
+	char *script = "[BuiltIn] List Process";
+  char *caller = data->msg->nick;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+
+  if (!data->bot->procQueue.head) {
+  	botty_say(data->bot, responseTarget, "%s: There are no running processes", caller);
+  	return 0;
+  }
+
+  BotProcessArgs *pArgs = bot_makeProcessArgs((void*)data->bot->procQueue.head, responseTarget);
+  if (!pArgs) {
+  	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
+  	return 0;
+  }
+
+  bot_queueProcess(data->bot, &_listProcesses, (void*)pArgs, script, caller);
+  return 0;
+}
+
+int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
+	CmdData *data = (CmdData *)i;
+
+  char *caller = data->msg->nick;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+
+  if (!args[1]) {
+  	botty_say(data->bot, responseTarget, "%s: Please specify a PID to terminate.", caller);
+  	return 0;
+  }
+
+  unsigned int pid = atoi(args[1]);
+  if (!pid) {
+  	botty_say(data->bot, responseTarget, "%s: Invalid PID specified.", caller);
+  	return 0;
+  }
+
+  BotProcess *toTerminate = bot_findProcessByPid(data->bot, pid);
+  if (!toTerminate) {
+  	botty_say(data->bot, responseTarget, "%s: Failed to find process with PID: %d.", caller, pid);
+  	return 0;
+  }
+
+
+  bot_dequeueProcess(data->bot, toTerminate);
+  botty_say(data->bot, responseTarget, "%s: terminated process with PID: %d.", caller, pid);
+  return 0;
+}
 
 /*
  * Initialize the built in commands provided in this file.
@@ -213,5 +317,7 @@ int botcmd_builtin(BotInfo *bot) {
   bot_addcommand(bot, "source", 0, 1, &botcmd_builtin_source);
   bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_builtin_die);
   bot_addcommand(bot, "script", 0, 3, &botcmd_builtin_script);
+  bot_addcommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
+  bot_addcommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
   return 0;
 }

@@ -310,9 +310,6 @@ int bot_parse(BotInfo *bot, char *line) {
       break;
     }
     else {
-      //ignore non-critical events while processing
-      if (bot_isProcessing(bot)) break;
-
       BotCmd *cmd = NULL;
       IrcMsg *msg = ircMsg_irc_new(line, bot->commands, &cmd);
       IRC_API_Actions action = IRC_ACTION_NOP;
@@ -442,27 +439,109 @@ void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) 
   command_reg(bot->commands, cmd, flags, args, fn);
 }
 
-void bot_setProcess(BotInfo *bot, BotProcessFn fn, void *args) {
-  bot->process.fn = fn;
-  bot->process.arg = args;
-  bot->process.busy = 1;
-}
 
-void bot_clearProcess(BotInfo *bot) {
-  bot->process.fn = NULL;
-  bot->process.arg = NULL;
-  bot->process.busy = 0;
-}
+BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget) {
+  BotProcessArgs *args = calloc(1, sizeof(BotProcessArgs));
+  if (!args) return NULL;
 
-void bot_runProcess(BotInfo *bot) {
-  if (bot->process.fn) {
-    if ((bot->process.busy = bot->process.fn((void *)bot, bot->process.arg)) < 0)
-      bot_clearProcess(bot);
+  args->data = data;
+  if (responseTarget) {
+		size_t responseTargetLen = strlen(responseTarget);
+  	args->target = calloc(1, responseTargetLen + 1);
+  	if (!args->target) return NULL;
+  	strncpy(args->target, responseTarget, responseTargetLen);
   }
+
+  return args;
 }
 
-int bot_isProcessing(BotInfo *bot) {
-  return bot->process.busy > 0;
+void bot_freeProcessArgs(BotProcessArgs *args, BotProcessArgsFreeFn fn) {
+	if (fn) fn(args->data);
+
+	if (args->target) {
+		free(args->target);
+		args->target = NULL;
+	}
+	free(args);
+}
+
+
+void bot_queueProcess(BotInfo *bot, BotProcessFn fn, void *args, char *cmd, char *caller) {
+	BotProcess *process = calloc(1, sizeof(BotProcess));
+	if (!process) {
+		fprintf(stderr, "bot_queueProcess: error allocating new process\n");
+		return;
+	}
+
+	process->fn = fn;
+	process->arg = args;
+	process->busy = 1;
+
+	if (bot->procQueue.head) {
+		BotProcess *curProc = bot->procQueue.head;
+		while (curProc->next) {
+			curProc = curProc->next;
+		}
+		curProc->next = process;
+	}
+	else {
+		bot->procQueue.head = process;
+	}
+
+	bot->procQueue.count++;
+	process->pid = (++bot->procQueue.pidTicker);
+	snprintf(process->details, MAX_MSG_LEN, "PID: %d: %s - %s", process->pid, cmd, caller);
+	fprintf(stderr, "bot_queueProcess: Added new process to queue:\n %s\n", process->details);
+}
+
+void bot_dequeueProcess(BotInfo *bot, BotProcess *process) {
+	if (!process) return;
+
+	if (bot->procQueue.head != process) {
+		BotProcess *proc = bot->procQueue.head;
+		while (proc->next != process) {
+			proc = proc->next;
+		}
+		proc->next = process->next;
+	}
+	else {
+		bot->procQueue.head = process->next;
+	}
+
+	if (bot->procQueue.current == process)
+		bot->procQueue.current = process->next;
+
+	bot->procQueue.count--;
+	fprintf(stderr, "bot_queueProcess: Removed process:\n %s\n", process->details);
+	free(process);
+}
+
+BotProcess *bot_findProcessByPid(BotInfo *bot, unsigned int pid) {
+	BotProcess *process = bot->procQueue.head;
+
+	while (process && process->pid != pid) {
+		process = process->next;
+	}
+
+	if (!process)
+		fprintf(stderr, "Failed to located PID: %d\n", pid);
+	else
+		fprintf(stderr, "Located Process:\n %s\n", process->details);
+
+	return process;
+}
+
+void bot_updateProcesses(BotInfo *bot) {
+	if (!bot->procQueue.current)
+		bot->procQueue.current = bot->procQueue.head;
+
+	BotProcess *proc = bot->procQueue.current;
+	if (proc && proc->fn) {
+  	if ((proc->busy = proc->fn((void *)bot, proc->arg)) < 0)
+      bot_dequeueProcess(bot, proc);
+    else
+    	bot->procQueue.current = proc->next;
+  }
 }
 
 /*
@@ -484,8 +563,8 @@ int bot_run(BotInfo *bot) {
     }
   }
 
-  bot_runProcess(bot);
-
+  //bot_runProcess(bot);
+  bot_updateProcesses(bot);
   //process all input first before receiving more
   if (bot->line) {
     if (connection_client_poll(&bot->conInfo, POLLOUT, &ret)) {

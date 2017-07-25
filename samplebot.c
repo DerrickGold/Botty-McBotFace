@@ -358,10 +358,11 @@ static int _draw(void *b, void *args) {
 
 int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
+  char *caller = data->msg->nick;
   char path[512];
   char *file = args[1];
   if (!file) {
-    botty_say(data->bot, NULL, "%s: please specify a picture.", data->msg->nick);
+    botty_say(data->bot, NULL, "%s: please specify a picture.", caller);
     return 0;
   }
 
@@ -374,7 +375,7 @@ int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
   //initialize and start the draw process
   //A process will block all input for a given bot until
   //it has completed the assigned process.
-  bot_setProcess(data->bot, &_draw, (void*)f);
+  bot_queueProcess(data->bot, &_draw, (void*)f, "draw", caller);
   return 0;
 }
 
@@ -660,13 +661,14 @@ int links_print_process(void *b, void *args) {
 
 int links_print(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
+  char *caller = data->msg->nick;
   if (ListOfLinks.count == 0) {
-    botty_say(data->bot, NULL, "%s: There is no link history to post.", data->msg->nick);
+    botty_say(data->bot, NULL, "%s: There is no link history to post.", caller);
     return 0;
   }
   ListOfLinks.lastPos = ListOfLinks.head;
   botty_say(data->bot, NULL, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
-  bot_setProcess(data->bot, &links_print_process, (void*)&ListOfLinks);
+  bot_queueProcess(data->bot, &links_print_process, (void*)&ListOfLinks, "links", caller);
   return 0;
 }
 

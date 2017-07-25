@@ -34,8 +34,24 @@ typedef struct BotProcess {
   BotProcessFn fn;
   void *arg;
   char busy;
+  struct BotProcess *next;
+  unsigned int pid;
+  char details[MAX_MSG_LEN];
 } BotProcess;
 
+typedef struct BotProcessQueue {
+  int count;
+  unsigned int pidTicker;
+  BotProcess *head;
+  BotProcess *current;
+} BotProcessQueue;
+
+typedef struct BotProcessArgs {
+  void *data;
+  char *target;
+} BotProcessArgs;
+
+typedef int (*BotProcessArgsFreeFn)(void *);
 
 typedef struct BotInfo {
   //user config values
@@ -60,6 +76,8 @@ typedef struct BotInfo {
   NickList *names;
 
   BotProcess process;
+  BotProcessQueue procQueue;
+
   SSLConInfo conInfo;
   struct timeval startTime;
   //some pointer the user can use
@@ -81,13 +99,15 @@ char *bot_getNick(BotInfo *bot);
 
 void bot_cleanup(BotInfo *info);
 
-void bot_setProcess(BotInfo *bot, BotProcessFn fn, void *args);
+BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget);
 
-void bot_clearProcess(BotInfo *bot);
+void bot_freeProcessArgs(BotProcessArgs *args, BotProcessArgsFreeFn fn);
 
-void bot_runProcess(BotInfo *bot);
+void bot_queueProcess(BotInfo *bot, BotProcessFn fn, void *args, char *cmd, char *caller);
 
-int bot_isProcessing(BotInfo *bot);
+void bot_dequeueProcess(BotInfo *bot, BotProcess *process);
+
+BotProcess *bot_findProcessByPid(BotInfo *bot, unsigned int pid);
 
 void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
 

@@ -1,3 +1,5 @@
 #!/bin/bash
 
-echo "$1" | cowsay
+caller=$1
+args=$2
+echo "$args" | cowsay

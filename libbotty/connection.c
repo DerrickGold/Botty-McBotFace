@@ -101,6 +101,7 @@ int connection_client_init(const char *addr, const char *port, struct addrinfo *
     return -1;
   }
 
+  setNonBlock(sockfd, 1);
   return sockfd;
 }
 
@@ -163,7 +164,6 @@ int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *c
     }
   }
 
-  //  setNonBlock(conInfo->socket, 1);
   fprintf(stderr, "SSL Connection Successful!\n");
   return 0;
 }

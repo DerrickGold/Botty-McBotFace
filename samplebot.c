@@ -313,22 +313,12 @@ static int _draw(void *b, BotProcessArgs *args) {
   char buf[MAX_MSG_LEN];
   static char throttleBuf[MAX_MSG_LEN];
 
-  struct timespec sleepTimer = {
-    .tv_sec = 0,
-    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
-  };
-
-  struct timespec throttleTimer = {
-    .tv_sec = THROTTLE_WAIT_SEC,
-    .tv_nsec = 0
-  };
 
   if (feof(input))
     goto _fin;
 
   if (botty_isThrottled(bot)) {
-    fprintf(stderr, "Sleeping due to throttling\n");
-    nanosleep(&throttleTimer, NULL);
+    fprintf(stderr, "Writing throttle buf\n");
     if (botty_say(bot, NULL, ". %s", throttleBuf) < 0)
       goto _fin;
   }
@@ -351,7 +341,6 @@ static int _draw(void *b, BotProcessArgs *args) {
       goto _fin;
   }
 
-  nanosleep(&sleepTimer, NULL);
   //return 1 to keep the process going
   return 1;
 
@@ -657,11 +646,6 @@ int links_print_process(void *b, BotProcessArgs *args) {
   LinksHead *listData = (LinksHead *)args->data;
   char *responseTarget = args->target;
 
-  struct timespec sleepTimer = {
-    .tv_sec = 0,
-    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
-  };
-
   if (!listData->lastPos)
     goto _fin;
 
@@ -669,7 +653,6 @@ int links_print_process(void *b, BotProcessArgs *args) {
     goto _fin;
 
   listData->lastPos = listData->lastPos->next;
-  nanosleep(&sleepTimer, NULL);
   //return 1 to keep the process going
   return 1;
 

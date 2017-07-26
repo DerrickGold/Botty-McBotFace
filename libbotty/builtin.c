@@ -87,22 +87,11 @@ static int _script(void *b, BotProcessArgs *sArgs) {
   char buf[MAX_MSG_LEN];
   static char throttleBuf[MAX_MSG_LEN];
 
-  struct timespec sleepTimer = {
-    .tv_sec = 0,
-    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
-  };
-
-  struct timespec throttleTimer = {
-    .tv_sec = THROTTLE_WAIT_SEC,
-    .tv_nsec = 0
-  };
-
   if (feof(input))
     goto _fin;
 
   if (botty_isThrottled(bot)) {
-    fprintf(stderr, "Sleeping due to throttling\n");
-    nanosleep(&throttleTimer, NULL);
+    fprintf(stderr, "Writing throttlebuf\n");
     if (botty_say(bot, responseTarget, ". %s", throttleBuf) < 0)
       goto _fin;
   }
@@ -124,8 +113,6 @@ static int _script(void *b, BotProcessArgs *sArgs) {
     if (botty_say(bot, responseTarget, ". %s", s) < 0)
       goto _fin;
   }
-
-  nanosleep(&sleepTimer, NULL);
   //return 1 to keep the process going
   return 1;
 
@@ -190,22 +177,11 @@ static int _listProcesses(void *b, BotProcessArgs *pArgs) {
   char buf[MAX_MSG_LEN];
   static char throttleBuf[MAX_MSG_LEN];
 
-  struct timespec sleepTimer = {
-    .tv_sec = 0,
-    .tv_nsec = ONE_SEC_IN_NS / MSG_PER_SECOND_LIM
-  };
-
-  struct timespec throttleTimer = {
-    .tv_sec = THROTTLE_WAIT_SEC,
-    .tv_nsec = 0
-  };
-
   if (!proc)
     goto _fin;
 
   if (botty_isThrottled(bot)) {
-    fprintf(stderr, "Sleeping due to throttling\n");
-    nanosleep(&throttleTimer, NULL);
+    fprintf(stderr, "Writing throttlebuf\n");
     if (botty_say(bot, responseTarget, ". %s", throttleBuf) < 0)
       goto _fin;
   }
@@ -221,7 +197,6 @@ static int _listProcesses(void *b, BotProcessArgs *pArgs) {
       goto _fin;
   }
 
-  nanosleep(&sleepTimer, NULL);
   pArgs->data = (void *)proc->next;
   //return 1 to keep the process going
   return 1;

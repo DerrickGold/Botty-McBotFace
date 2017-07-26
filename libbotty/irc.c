@@ -28,7 +28,11 @@ static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
 
 int bot_parse(BotInfo *bot, char *line);
 
-
+unsigned int timeDiffInUS(struct timeval *first, struct timeval *second) {
+	unsigned int us1 = (first->tv_sec * ONE_SEC_IN_US) + first->tv_usec;
+	unsigned int us2 = (second->tv_sec * ONE_SEC_IN_US) + second->tv_usec;
+	return us1 - us2;
+}
 
 /*
  * Send an irc formatted message to the server.
@@ -491,6 +495,7 @@ void bot_queueProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char 
 
 	bot->procQueue.count++;
 	process->pid = (++bot->procQueue.pidTicker);
+	gettimeofday(&process->updated, NULL);
 	snprintf(process->details, MAX_MSG_LEN, "PID: %d: %s - %s", process->pid, cmd, caller);
 	fprintf(stderr, "bot_queueProcess: Added new process to queue:\n %s\n", process->details);
 }
@@ -541,10 +546,18 @@ void bot_updateProcesses(BotInfo *bot) {
 
 	BotProcess *proc = bot->procQueue.current;
 	if (proc && proc->fn) {
-  	if ((proc->busy = proc->fn((void *)bot, proc->arg)) < 0)
-      bot_dequeueProcess(bot, proc);
-    else
-    	bot->procQueue.current = proc->next;
+		struct timeval curTime = {};
+		gettimeofday(&curTime, NULL);
+
+		if (timeDiffInUS(&curTime, &proc->updated) > ONE_SEC_IN_US/MSG_PER_SECOND_LIM) {
+			gettimeofday(&proc->updated, NULL);
+	  	if ((proc->busy = proc->fn((void *)bot, proc->arg)) < 0)
+	      bot_dequeueProcess(bot, proc);
+	    else
+	    	bot->procQueue.current = proc->next;
+	  }
+	  else
+	  	bot->procQueue.current = proc->next;
   }
 }
 

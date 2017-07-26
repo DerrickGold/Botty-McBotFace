@@ -46,6 +46,7 @@ typedef struct BotProcess {
   struct BotProcess *next;
   unsigned int pid;
   char details[MAX_MSG_LEN];
+  struct timeval updated;
 } BotProcess;
 
 typedef struct BotProcessQueue {

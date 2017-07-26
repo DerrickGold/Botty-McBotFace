@@ -90,7 +90,6 @@ LinksHead ListOfLinks = {};
 
 char *links_msgContainsLink(char *input);
 char links_store(LinksHead *head, char *input);
-int links_print_process(void *b, void *args);
 int links_print(void *i, char *args[MAX_BOT_ARGS]);
 void links_purge(LinksHead *list);
 
@@ -300,10 +299,17 @@ int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+
+static int _draw_free(void *a) {
+  FILE *fh = (FILE *)a;
+  fclose(fh);
+  return 0;
+}
+
 //A sample 'process' function that can be given to the bot
-static int _draw(void *b, void *args) {
+static int _draw(void *b, BotProcessArgs *args) {
   BotInfo *bot = (BotInfo *)b;
-  FILE *input = (FILE *)args;
+  FILE *input = (FILE *)args->data;
   char buf[MAX_MSG_LEN];
   static char throttleBuf[MAX_MSG_LEN];
 
@@ -359,6 +365,9 @@ static int _draw(void *b, void *args) {
 int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   char *caller = data->msg->nick;
+  char *responseTarget = botty_respondDest(data);
+  char *script = "draw";
+
   char path[512];
   char *file = args[1];
   if (!file) {
@@ -372,10 +381,18 @@ int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
     botty_say(data->bot, NULL, "File '%s' does not exist!", file);
     return 0;
   }
+
+  BotProcessArgs *sArgs = bot_makeProcessArgs((void *)f, responseTarget, &_draw_free);
+  if (!sArgs) {
+    botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
+    fclose(f);
+    return 0;
+  }
+
   //initialize and start the draw process
   //A process will block all input for a given bot until
   //it has completed the assigned process.
-  bot_queueProcess(data->bot, &_draw, (void*)f, "draw", caller);
+  bot_queueProcess(data->bot, &_draw, sArgs, script, caller);
   return 0;
 }
 
@@ -635,9 +652,10 @@ char links_store(LinksHead *head, char *input) {
   return 0;
 }
 
-int links_print_process(void *b, void *args) {
+int links_print_process(void *b, BotProcessArgs *args) {
   BotInfo *bot = (BotInfo *)b;
-  LinksHead *listData = (LinksHead *)args;
+  LinksHead *listData = (LinksHead *)args->data;
+  char *responseTarget = args->target;
 
   struct timespec sleepTimer = {
     .tv_sec = 0,
@@ -647,7 +665,7 @@ int links_print_process(void *b, void *args) {
   if (!listData->lastPos)
     goto _fin;
 
-  if (botty_say(bot, NULL, ". %s", listData->lastPos->url) < 0)
+  if (botty_say(bot, responseTarget, ". %s", listData->lastPos->url) < 0)
     goto _fin;
 
   listData->lastPos = listData->lastPos->next;
@@ -662,13 +680,23 @@ int links_print_process(void *b, void *args) {
 int links_print(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   char *caller = data->msg->nick;
+  char *responseTarget = botty_respondDest(data);
+  char *script = "links";
+
   if (ListOfLinks.count == 0) {
     botty_say(data->bot, NULL, "%s: There is no link history to post.", caller);
     return 0;
   }
+
+  BotProcessArgs *sArgs = bot_makeProcessArgs((void*)&ListOfLinks, responseTarget, NULL);
+  if (!sArgs) {
+    botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
+    return 0;
+  }
+
   ListOfLinks.lastPos = ListOfLinks.head;
   botty_say(data->bot, NULL, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
-  bot_queueProcess(data->bot, &links_print_process, (void*)&ListOfLinks, "links", caller);
+  bot_queueProcess(data->bot, &links_print_process, sArgs, script, caller);
   return 0;
 }
 

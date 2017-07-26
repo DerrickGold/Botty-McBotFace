@@ -11,12 +11,6 @@
 #include "globals.h"
 #include "botapi.h"
 
-typedef struct ScriptArgs {
-	FILE *pFile;
-	char *target;
-} ScriptArgs;
-
-
 /*
  * If necessary, returns where the bot received its input
  * as to respond in the appropriate place.
@@ -77,35 +71,17 @@ static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
   return -1;
 }
 
-static ScriptArgs *_setScriptArgs(FILE *pFile, char *responseTarget) {
-  ScriptArgs *args = calloc(1, sizeof(ScriptArgs));
-  if (!args) return NULL;
 
-  args->pFile = pFile;
-  if (responseTarget) {
-		size_t responseTargetLen = strlen(responseTarget);
-  	args->target = calloc(1, responseTargetLen + 1);
-  	if (!args->target) return NULL;
-  	strncpy(args->target, responseTarget, responseTargetLen);
-  }
-
-  return args;
-}
-
-static void _freeScriptArgs(ScriptArgs *args) {
-	if (args->target) {
-		free(args->target);
-		args->target = NULL;
-	}
-	pclose(args->pFile);
-	free(args);
+static int _freeScriptArgs(void *args) {
+	FILE *pFile = (FILE *)args;
+	pclose(pFile);
+	return 0;
 }
 
 //A sample 'process' function that can be given to the bot
-static int _script(void *b, void *args) {
+static int _script(void *b, BotProcessArgs *sArgs) {
   BotInfo *bot = (BotInfo *)b;
-  ScriptArgs *sArgs = (ScriptArgs *)args;
-  FILE *input = sArgs->pFile;
+  FILE *input = (FILE *)sArgs->data;
   char *responseTarget = sArgs->target;
 
   char buf[MAX_MSG_LEN];
@@ -156,7 +132,7 @@ static int _script(void *b, void *args) {
   _fin:
   //return negative value to indicate the process
   //is complete
-  _freeScriptArgs(sArgs);
+  bot_freeProcessArgs(sArgs);
   return -1;
 }
 
@@ -194,21 +170,21 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  ScriptArgs *sArgs = _setScriptArgs(f, botcmd_builtin_getTarget(data));
+  BotProcessArgs *sArgs = bot_makeProcessArgs((void *)f, botcmd_builtin_getTarget(data), &_freeScriptArgs);
   if (!sArgs) {
   	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
   	pclose(f);
   	return 0;
   }
 
-  bot_queueProcess(data->bot, &_script, (void*)sArgs, script, caller);
+  bot_queueProcess(data->bot, &_script, sArgs, script, caller);
   return 0;
 }
 
-static int _listProcesses(void *b, void *args) {
+static int _listProcesses(void *b, BotProcessArgs *pArgs) {
   BotInfo *bot = (BotInfo *)b;
-  BotProcessArgs *pArgs = (BotProcessArgs *)args;
   BotProcess *proc = (BotProcess *)pArgs->data;
+
   char *responseTarget = pArgs->target;
 
   char buf[MAX_MSG_LEN];
@@ -253,7 +229,7 @@ static int _listProcesses(void *b, void *args) {
   _fin:
   //return negative value to indicate the process
   //is complete
-  bot_freeProcessArgs(pArgs, NULL);
+  bot_freeProcessArgs(pArgs);
   return -1;
 }
 
@@ -269,13 +245,13 @@ int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
   	return 0;
   }
 
-  BotProcessArgs *pArgs = bot_makeProcessArgs((void*)data->bot->procQueue.head, responseTarget);
+  BotProcessArgs *pArgs = bot_makeProcessArgs((void*)data->bot->procQueue.head, responseTarget, NULL);
   if (!pArgs) {
   	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
   	return 0;
   }
 
-  bot_queueProcess(data->bot, &_listProcesses, (void*)pArgs, script, caller);
+  bot_queueProcess(data->bot, &_listProcesses, pArgs, script, caller);
   return 0;
 }
 

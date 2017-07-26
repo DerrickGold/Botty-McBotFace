@@ -440,7 +440,7 @@ void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) 
 }
 
 
-BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget) {
+BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget, BotProcessArgsFreeFn fn) {
   BotProcessArgs *args = calloc(1, sizeof(BotProcessArgs));
   if (!args) return NULL;
 
@@ -451,13 +451,14 @@ BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget) {
   	if (!args->target) return NULL;
   	strncpy(args->target, responseTarget, responseTargetLen);
   }
-
+  args->free = fn;
   return args;
 }
 
-void bot_freeProcessArgs(BotProcessArgs *args, BotProcessArgsFreeFn fn) {
-	if (fn) fn(args->data);
+void bot_freeProcessArgs(BotProcessArgs *args) {
+	if (!args) return;
 
+	if (args->free) args->free(args->data);
 	if (args->target) {
 		free(args->target);
 		args->target = NULL;
@@ -466,7 +467,7 @@ void bot_freeProcessArgs(BotProcessArgs *args, BotProcessArgsFreeFn fn) {
 }
 
 
-void bot_queueProcess(BotInfo *bot, BotProcessFn fn, void *args, char *cmd, char *caller) {
+void bot_queueProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller) {
 	BotProcess *process = calloc(1, sizeof(BotProcess));
 	if (!process) {
 		fprintf(stderr, "bot_queueProcess: error allocating new process\n");
@@ -512,6 +513,9 @@ void bot_dequeueProcess(BotInfo *bot, BotProcess *process) {
 		bot->procQueue.current = process->next;
 
 	bot->procQueue.count--;
+	//if process is dequeued while it was running, cleanup the process data
+	if (process->busy >= 0) bot_freeProcessArgs(process->arg);
+
 	fprintf(stderr, "bot_queueProcess: Removed process:\n %s\n", process->details);
 	free(process);
 }

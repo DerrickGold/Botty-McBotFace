@@ -7,6 +7,7 @@
 #include "callback.h"
 #include "irc.h"
 #include "cmddata.h"
+#include "builtin.h"
 
 int botty_init(BotInfo *bot, int argc, char *argv[], int argstart);
 

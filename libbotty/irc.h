@@ -28,11 +28,20 @@ typedef struct IrcInfo {
   char channel[MAX_CHAN_LEN];
 } IrcInfo;
 
-typedef int (*BotProcessFn)(void *, void *);
+
+typedef int (*BotProcessArgsFreeFn)(void *);
+
+typedef struct BotProcessArgs {
+  void *data;
+  char *target;
+  BotProcessArgsFreeFn free;
+} BotProcessArgs;
+
+typedef int (*BotProcessFn)(void *, BotProcessArgs *);
 
 typedef struct BotProcess {
   BotProcessFn fn;
-  void *arg;
+  BotProcessArgs *arg;
   char busy;
   struct BotProcess *next;
   unsigned int pid;
@@ -45,13 +54,6 @@ typedef struct BotProcessQueue {
   BotProcess *head;
   BotProcess *current;
 } BotProcessQueue;
-
-typedef struct BotProcessArgs {
-  void *data;
-  char *target;
-} BotProcessArgs;
-
-typedef int (*BotProcessArgsFreeFn)(void *);
 
 typedef struct BotInfo {
   //user config values
@@ -99,11 +101,11 @@ char *bot_getNick(BotInfo *bot);
 
 void bot_cleanup(BotInfo *info);
 
-BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget);
+BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget, BotProcessArgsFreeFn fn);
 
-void bot_freeProcessArgs(BotProcessArgs *args, BotProcessArgsFreeFn fn);
+void bot_freeProcessArgs(BotProcessArgs *args);
 
-void bot_queueProcess(BotInfo *bot, BotProcessFn fn, void *args, char *cmd, char *caller);
+void bot_queueProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
 
 void bot_dequeueProcess(BotInfo *bot, BotProcess *process);
 

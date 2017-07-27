@@ -56,6 +56,33 @@ typedef struct BotProcessQueue {
   BotProcess *current;
 } BotProcessQueue;
 
+
+typedef enum {
+  QUEUED_STATE_INIT,
+  QUEUED_STATE_SENT,
+  QUEUED_STATE_THROTTLED
+} BotQueuedMessageState;
+
+typedef struct BotQueuedMessage {
+  char msg[MAX_MSG_LEN];
+  size_t len;
+
+  //not used yet, need to determine if throttling is on a per channel basis
+  //or not.
+  char channel[MAX_CHAN_LEN];
+
+  BotQueuedMessageState status;
+  struct BotQueuedMessage *next;
+} BotQueuedMessage;
+
+typedef struct BotSendMessageQueue {
+  BotQueuedMessage *start;
+  BotQueuedMessage *end;
+  int count;
+  struct timeval nextSendTime;
+  int writeStatus;
+} BotSendMessageQueue;
+
 typedef struct BotInfo {
   //user config values
   int id;
@@ -78,11 +105,12 @@ typedef struct BotInfo {
   HashTable *commands;
   NickList *names;
 
-  BotProcess process;
   BotProcessQueue procQueue;
 
   SSLConInfo conInfo;
   struct timeval startTime;
+
+  BotSendMessageQueue msgQueue;
   //some pointer the user can use
   void *data;
 } BotInfo;
@@ -92,7 +120,7 @@ int bot_irc_init(void);
 
 void bot_irc_cleanup(void);
 
-int bot_irc_send(SSLConInfo *conInfo, char *msg);
+int bot_irc_send(BotInfo *bot, char *msg);
 
 int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 

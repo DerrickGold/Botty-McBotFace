@@ -67,7 +67,7 @@ static int botcmd_builtin_source(void *i, char *args[MAX_BOT_ARGS]) {
 static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   botty_say(data->bot, NULL, "Seeya!");
-  bot_irc_send(&data->bot->conInfo, "QUIT :leaving");
+  bot_irc_send(data->bot, "QUIT :leaving");
   return -1;
 }
 

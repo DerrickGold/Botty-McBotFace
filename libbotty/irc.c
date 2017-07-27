@@ -12,6 +12,8 @@
 #include "connection.h"
 #include "cmddata.h"
 
+#define QUEUE_SEND_MSG 1
+
 HashTable *IrcApiActions = NULL;
 
 const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN] = {
@@ -25,21 +27,147 @@ const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN] = {
 };
 
 static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
-
 int bot_parse(BotInfo *bot, char *line);
 
-unsigned int timeDiffInUS(struct timeval *first, struct timeval *second) {
+static int timeDiffInUS(struct timeval *first, struct timeval *second) {
 	unsigned int us1 = (first->tv_sec * ONE_SEC_IN_US) + first->tv_usec;
 	unsigned int us2 = (second->tv_sec * ONE_SEC_IN_US) + second->tv_usec;
 	return us1 - us2;
 }
+
+static void calculateNextMsgTime(struct timeval *time, char throttled) {
+	gettimeofday(time, NULL);
+	if (!throttled) {
+		if (MSG_PER_SECOND_LIM == 1) time->tv_sec += 1;
+		else time->tv_usec += (ONE_SEC_IN_US/MSG_PER_SECOND_LIM);
+	}
+	else {
+		time->tv_sec += THROTTLE_WAIT_SEC;
+	}
+}
+
+
+static BotQueuedMessage *newQueueMsg(char *msg, char *responseTarget, size_t len) {
+	BotQueuedMessage *newMsg = calloc(1, sizeof(BotQueuedMessage));
+	if (!newMsg) {
+		fprintf(stderr, "newQueueMsg: Error allocating new message for:\n%s to %s\n", msg, responseTarget);
+		return NULL;
+	}
+	strncpy(newMsg->msg, msg, MAX_MSG_LEN);
+	strncpy(newMsg->channel, responseTarget, MAX_CHAN_LEN);
+	newMsg->status = QUEUED_STATE_INIT;
+	newMsg->len = len;
+	return newMsg;
+}
+
+static void freeQueueMsg(BotQueuedMessage *msg) {
+	free(msg);
+}
+
+static BotQueuedMessage *peekQueueMsg(BotSendMessageQueue *queue) {
+	if (!queue || !queue->start)
+		return NULL;
+
+	return queue->start;
+}
+
+static BotQueuedMessage *popQueueMsg(BotSendMessageQueue *queue) {
+	if (!queue || !queue->start)
+		return NULL;
+
+	BotQueuedMessage *poppedMsg = queue->start;
+	queue->start = poppedMsg->next;
+	if (queue->end == poppedMsg) queue->end = NULL;
+	queue->count--;
+	fprintf(stderr, "%d queued messages\n", queue->count);
+	return poppedMsg;
+}
+
+static void pushQueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
+	if (!queue || !msg)
+		return;
+
+	msg->next = queue->start;
+	if (!queue->start)
+		queue->end = msg;
+	queue->start = msg;
+	queue->count++;
+	fprintf(stderr, "%d queued messages\n", queue->count);
+}
+
+static void enqueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
+	if (!queue || !msg)
+		return;
+
+	queue->count++;
+	if (!queue->end && !queue->start) {
+		queue->start = msg;
+		queue->end = msg;
+		return;
+	}
+	queue->end->next = msg;
+	queue->end = msg;
+}
+
+
+
+
+static void processMsgQueue(BotInfo *bot) {
+	BotSendMessageQueue *queue = &bot->msgQueue;
+	struct timeval currentTime = {};
+	gettimeofday(&currentTime, NULL);
+
+	if (timeDiffInUS(&currentTime, &queue->nextSendTime) < 0)
+		return;
+
+	int ret = 0;
+	if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret)) {
+		fprintf(stderr, "processMsgQueue: socket not ready for output\n");
+		return;
+	}
+
+
+	BotQueuedMessage *msg = peekQueueMsg(queue);
+	if (!msg) return;
+
+	switch (msg->status) {
+		case QUEUED_STATE_INIT: {
+			msg->status = QUEUED_STATE_SENT;
+			fprintf(stdout, "SENDING (%d bytes): %s\n", msg->len, msg->msg);
+			queue->writeStatus = connection_client_send(&bot->conInfo, msg->msg, msg->len);
+			calculateNextMsgTime(&queue->nextSendTime, 0);
+		} break;
+		case QUEUED_STATE_SENT: {
+			if (bot_isThrottled(bot)) {
+				fprintf(stderr, "Throttled, will retry sending %s\n", msg->msg);
+				msg->status = QUEUED_STATE_INIT;
+				calculateNextMsgTime(&queue->nextSendTime, 1);
+			} else {
+				fprintf(stderr, "Successfully sent: %d bytes\n", msg->len);
+				msg = popQueueMsg(queue);
+				freeQueueMsg(msg);
+				calculateNextMsgTime(&queue->nextSendTime, 0);
+			}
+		} break;
+
+		case QUEUED_STATE_THROTTLED: {
+			msg->status = QUEUED_STATE_INIT;
+		} break;
+
+		default: break;
+	}
+}
+
+
+
 
 /*
  * Send an irc formatted message to the server.
  * Assumes your message is appropriately sized for a single
  * message.
  */
-static int _send(SSLConInfo *conInfo, char *command, char *target, char *msg, char *ctcp) {
+static int _send(BotInfo *bot, char *command, char *target, char *msg, char *ctcp, char queued) {
+	SSLConInfo *conInfo = &bot->conInfo;
   char curSendBuf[MAX_MSG_LEN];
   int written = 0;
   char *sep = PARAM_DELIM_STR;
@@ -54,6 +182,13 @@ static int _send(SSLConInfo *conInfo, char *command, char *target, char *msg, ch
   else {
     written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s %s"CTCP_MARKER"%s %s"CTCP_MARKER"%s",
                        command, target, sep, ctcp, msg, MSG_FOOTER);
+  }
+
+  if (queued) {
+	  BotQueuedMessage *toSend = newQueueMsg(curSendBuf, target, written);
+	  if (toSend) enqueueMsg(&bot->msgQueue, toSend);
+	  else fprintf(stderr, "Failed to queue message: %s\n", curSendBuf);
+  	return 0;
   }
 
   fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);
@@ -79,7 +214,7 @@ static unsigned int _getMsgOverHeadLen(char *command, char *target, char *ctcp, 
  * MAX_MSG_SPLITS chunks.
  *
  */
-int bot_irc_send_s(SSLConInfo *conInfo, char *command, char *target, char *msg, char *ctcp, char *nick) {
+int bot_irc_send_s(BotInfo *bot, char *command, char *target, char *msg, char *ctcp, char *nick) {
   unsigned int overHead = _getMsgOverHeadLen(command, target, ctcp, nick);
   unsigned int msgLen =  overHead + strlen(msg);
   if (msgLen >= MAX_MSG_LEN) {
@@ -100,7 +235,7 @@ int bot_irc_send_s(SSLConInfo *conInfo, char *command, char *target, char *msg, 
         replaced = *end;
         *end = '\0';
       }
-      _send(conInfo, command, target, nextMsg, ctcp);
+      _send(bot, command, target, nextMsg, ctcp, QUEUE_SEND_MSG);
       nextMsg = end;
       if (end < last) *end = replaced;
       //remove any leading spaces for the next message
@@ -110,11 +245,11 @@ int bot_irc_send_s(SSLConInfo *conInfo, char *command, char *target, char *msg, 
     return 0;
   }
 
-  return _send(conInfo, command, target, msg, ctcp);
+  return _send(bot, command, target, msg, ctcp, QUEUE_SEND_MSG);
 }
 
-int bot_irc_send(SSLConInfo *conInfo, char *msg) {
-  return _send(conInfo, NULL, NULL, msg, NULL);
+int bot_irc_send(BotInfo *bot, char *msg) {
+  return _send(bot, NULL, NULL, msg, NULL, 0);
 }
 
 
@@ -134,7 +269,7 @@ static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *
     return -1;
   }
   vsnprintf(msgBuf, msgBufLen - 1, fmt, a);
-  int status = bot_irc_send_s(&bot->conInfo, action, target, msgBuf, ctcp, bot_getNick(bot));
+  int status = bot_irc_send_s(bot, action, target, msgBuf, ctcp, bot_getNick(bot));
   free(msgBuf);
   return status;
 }
@@ -263,7 +398,7 @@ int bot_parse(BotInfo *bot, char *line) {
   if (!strncmp(line, "PING", strlen("PING"))) {
     char *pong = line + strlen("PING") + 1;
     snprintf(sysBuf, sizeof(sysBuf), "PONG %s", pong);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     return 0;
   }
 
@@ -285,9 +420,9 @@ int bot_parse(BotInfo *bot, char *line) {
   case CONSTATE_CONNECTED:
     //register the bot
     snprintf(sysBuf, sizeof(sysBuf), "NICK %s", bot->nick[bot->nickAttempt]);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", bot->ident, bot->host, bot->realname);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     gettimeofday(&bot->startTime, NULL);
     //go to listening state to wait for registration confirmation
     bot->state = CONSTATE_LISTENING;
@@ -295,7 +430,7 @@ int bot_parse(BotInfo *bot, char *line) {
 
   case CONSTATE_REGISTERED:
     snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", bot->info->channel);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
@@ -582,12 +717,11 @@ int bot_run(BotInfo *bot) {
 
   //bot_runProcess(bot);
   bot_updateProcesses(bot);
+  processMsgQueue(bot);
   //process all input first before receiving more
   if (bot->line) {
-    if (connection_client_poll(&bot->conInfo, POLLOUT, &ret)) {
-      if ((n = bot_parse(bot, bot->line)) < 0) return n;
-      bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
-    }
+    if ((n = bot_parse(bot, bot->line)) < 0) return n;
+    bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
     return 0;
   }
 

@@ -30,7 +30,7 @@
 
 #define ONE_SEC_IN_NS 999999999
 #define ONE_SEC_IN_US 1000000
-#define MSG_PER_SECOND_LIM 1
+#define MSG_PER_SECOND_LIM 4
 #define THROTTLE_WAIT_SEC 5
 
 #define THROTTLE_NEEDLE "throttl"

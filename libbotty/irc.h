@@ -46,7 +46,6 @@ typedef struct BotProcess {
   struct BotProcess *next;
   unsigned int pid;
   char details[MAX_MSG_LEN];
-  struct timeval updated;
 } BotProcess;
 
 typedef struct BotProcessQueue {
@@ -103,7 +102,6 @@ typedef struct BotInfo {
   HashTable *commands;
   NickList *names;
 
-  BotProcess process;
   BotProcessQueue procQueue;
 
   SSLConInfo conInfo;
@@ -119,7 +117,7 @@ int bot_irc_init(void);
 
 void bot_irc_cleanup(void);
 
-int bot_irc_send(SSLConInfo *conInfo, char *msg);
+int bot_irc_send(BotInfo *bot, char *msg);
 
 int bot_init(BotInfo *bot, int argc, char *argv[], int argstart);
 

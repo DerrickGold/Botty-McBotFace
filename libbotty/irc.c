@@ -13,6 +13,8 @@
 #include "connection.h"
 #include "cmddata.h"
 
+#define QUEUE_SEND_MSG 1
+
 HashTable *IrcApiActions = NULL;
 
 const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN] = {
@@ -26,7 +28,6 @@ const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN] = {
 };
 
 static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
-
 int bot_parse(BotInfo *bot, char *line);
 
 static TimeStamp_t current_timestamp(void) {
@@ -161,7 +162,8 @@ static void processMsgQueue(BotInfo *bot) {
  * Assumes your message is appropriately sized for a single
  * message.
  */
-static int _send(SSLConInfo *conInfo, char *command, char *target, char *msg, char *ctcp) {
+static int _send(BotInfo *bot, char *command, char *target, char *msg, char *ctcp, char queued) {
+	SSLConInfo *conInfo = &bot->conInfo;
   char curSendBuf[MAX_MSG_LEN];
   int written = 0;
   char *sep = PARAM_DELIM_STR;
@@ -176,6 +178,13 @@ static int _send(SSLConInfo *conInfo, char *command, char *target, char *msg, ch
   else {
     written = snprintf(curSendBuf, MAX_MSG_LEN, "%s %s %s"CTCP_MARKER"%s %s"CTCP_MARKER"%s",
                        command, target, sep, ctcp, msg, MSG_FOOTER);
+  }
+
+  if (queued) {
+	  BotQueuedMessage *toSend = newQueueMsg(curSendBuf, target, written);
+	  if (toSend) enqueueMsg(&bot->msgQueue, toSend);
+	  else fprintf(stderr, "Failed to queue message: %s\n", curSendBuf);
+  	return 0;
   }
 
   fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);
@@ -201,7 +210,7 @@ static unsigned int _getMsgOverHeadLen(char *command, char *target, char *ctcp, 
  * MAX_MSG_SPLITS chunks.
  *
  */
-int bot_irc_send_s(SSLConInfo *conInfo, char *command, char *target, char *msg, char *ctcp, char *nick) {
+int bot_irc_send_s(BotInfo *bot, char *command, char *target, char *msg, char *ctcp, char *nick) {
   unsigned int overHead = _getMsgOverHeadLen(command, target, ctcp, nick);
   unsigned int msgLen =  overHead + strlen(msg);
   if (msgLen >= MAX_MSG_LEN) {
@@ -222,7 +231,7 @@ int bot_irc_send_s(SSLConInfo *conInfo, char *command, char *target, char *msg, 
         replaced = *end;
         *end = '\0';
       }
-      _send(conInfo, command, target, nextMsg, ctcp);
+      _send(bot, command, target, nextMsg, ctcp, QUEUE_SEND_MSG);
       nextMsg = end;
       if (end < last) *end = replaced;
       //remove any leading spaces for the next message
@@ -232,11 +241,11 @@ int bot_irc_send_s(SSLConInfo *conInfo, char *command, char *target, char *msg, 
     return 0;
   }
 
-  return _send(conInfo, command, target, msg, ctcp);
+  return _send(bot, command, target, msg, ctcp, QUEUE_SEND_MSG);
 }
 
-int bot_irc_send(SSLConInfo *conInfo, char *msg) {
-  return _send(conInfo, NULL, NULL, msg, NULL);
+int bot_irc_send(BotInfo *bot, char *msg) {
+  return _send(bot, NULL, NULL, msg, NULL, 0);
 }
 
 
@@ -256,7 +265,7 @@ static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *
     return -1;
   }
   vsnprintf(msgBuf, msgBufLen - 1, fmt, a);
-  int status = bot_irc_send_s(&bot->conInfo, action, target, msgBuf, ctcp, bot_getNick(bot));
+  int status = bot_irc_send_s(bot, action, target, msgBuf, ctcp, bot_getNick(bot));
   free(msgBuf);
   return status;
 }
@@ -617,7 +626,6 @@ void bot_queueProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char 
 
 	bot->procQueue.count++;
 	process->pid = (++bot->procQueue.pidTicker);
-	gettimeofday(&process->updated, NULL);
 	snprintf(process->details, MAX_MSG_LEN, "PID: %d: %s - %s", process->pid, cmd, caller);
 	fprintf(stderr, "bot_queueProcess: Added new process to queue:\n %s\n", process->details);
 }

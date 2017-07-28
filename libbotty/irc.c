@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 #include "builtin.h"
 #include "irc.h"
@@ -28,10 +29,131 @@ static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
 
 int bot_parse(BotInfo *bot, char *line);
 
-unsigned int timeDiffInUS(struct timeval *first, struct timeval *second) {
-	unsigned int us1 = (first->tv_sec * ONE_SEC_IN_US) + first->tv_usec;
-	unsigned int us2 = (second->tv_sec * ONE_SEC_IN_US) + second->tv_usec;
-	return us1 - us2;
+static TimeStamp_t current_timestamp(void) {
+    struct timeval te;
+    gettimeofday(&te, NULL); // get current time
+    TimeStamp_t milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // caculate milliseconds
+    // printf("milliseconds: %lld\n", milliseconds);
+    return milliseconds;
+}
+
+static long long calculateNextMsgTime(char throttled) {
+
+	long long curTime = current_timestamp();
+	if (throttled) curTime += THROTTLE_WAIT_SEC * ONE_SEC_IN_MS;
+	else curTime += (ONE_SEC_IN_MS/MSG_PER_SECOND_LIM);
+	return curTime;
+}
+
+static void initMsgQueue(BotSendMessageQueue *queue) {
+	queue->nextSendTimeMS = current_timestamp();
+}
+
+static BotQueuedMessage *newQueueMsg(char *msg, char *responseTarget, size_t len) {
+	BotQueuedMessage *newMsg = calloc(1, sizeof(BotQueuedMessage));
+	if (!newMsg) {
+		fprintf(stderr, "newQueueMsg: Error allocating new message for:\n%s to %s\n", msg, responseTarget);
+		return NULL;
+	}
+	strncpy(newMsg->msg, msg, MAX_MSG_LEN);
+	strncpy(newMsg->channel, responseTarget, MAX_CHAN_LEN);
+	newMsg->status = QUEUED_STATE_INIT;
+	newMsg->len = len;
+	return newMsg;
+}
+
+static void freeQueueMsg(BotQueuedMessage *msg) {
+	free(msg);
+}
+
+static BotQueuedMessage *peekQueueMsg(BotSendMessageQueue *queue) {
+	if (!queue || !queue->start)
+		return NULL;
+
+	return queue->start;
+}
+
+static BotQueuedMessage *popQueueMsg(BotSendMessageQueue *queue) {
+	if (!queue || !queue->start)
+		return NULL;
+
+	BotQueuedMessage *poppedMsg = queue->start;
+	queue->start = poppedMsg->next;
+	if (queue->end == poppedMsg) queue->end = NULL;
+	queue->count--;
+	fprintf(stderr, "%d queued messages\n", queue->count);
+	return poppedMsg;
+}
+
+static void pushQueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
+	if (!queue || !msg)
+		return;
+
+	msg->next = queue->start;
+	if (!queue->start)
+		queue->end = msg;
+	queue->start = msg;
+	queue->count++;
+	fprintf(stderr, "%d queued messages\n", queue->count);
+}
+
+static void enqueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
+	if (!queue || !msg)
+		return;
+
+	queue->count++;
+	if (!queue->end && !queue->start) {
+		queue->start = msg;
+		queue->end = msg;
+		return;
+	}
+	queue->end->next = msg;
+	queue->end = msg;
+}
+
+static void processMsgQueue(BotInfo *bot) {
+	BotSendMessageQueue *queue = &bot->msgQueue;
+	TimeStamp_t currentTime = current_timestamp();
+	TimeStamp_t timeDiff = currentTime - queue->nextSendTimeMS;
+
+	if (timeDiff < 0) return;
+
+	if (bot_isThrottled(bot)) {
+		bot->conInfo.lastThrottled = bot->conInfo.throttled;
+		fprintf(stderr, "resetting throttle limit");
+	}
+
+	bot->conInfo.isThrottled = (bot->conInfo.throttled != bot->conInfo.lastThrottled);
+
+	int ret = 0;
+	if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret)) {
+		fprintf(stderr, "processMsgQueue: socket not ready for output\n");
+		return;
+	}
+
+	BotQueuedMessage *msg = peekQueueMsg(queue);
+	if (!msg) return;
+
+	switch (msg->status) {
+		case QUEUED_STATE_INIT: {
+			msg->status = QUEUED_STATE_SENT;
+			fprintf(stdout, "SENDING (%d bytes): %s\n", (int)msg->len, msg->msg);
+			queue->writeStatus = connection_client_send(&bot->conInfo, msg->msg, msg->len);
+			queue->nextSendTimeMS = calculateNextMsgTime(0);
+		} break;
+		case QUEUED_STATE_SENT: {
+			if (bot_isThrottled(bot)) {
+				fprintf(stderr, "Throttled, will retry sending %s\n", msg->msg);
+				queue->nextSendTimeMS = calculateNextMsgTime(1);
+				msg->status = QUEUED_STATE_INIT;
+			} else {
+				fprintf(stderr, "Successfully sent: %d bytes\n", (int)msg->len);
+				msg = popQueueMsg(queue);
+				freeQueueMsg(msg);
+				queue->nextSendTimeMS = calculateNextMsgTime(0);
+			}
+		} break;
+	}
 }
 
 /*
@@ -263,7 +385,7 @@ int bot_parse(BotInfo *bot, char *line) {
   if (!strncmp(line, "PING", strlen("PING"))) {
     char *pong = line + strlen("PING") + 1;
     snprintf(sysBuf, sizeof(sysBuf), "PONG %s", pong);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     return 0;
   }
 
@@ -285,17 +407,16 @@ int bot_parse(BotInfo *bot, char *line) {
   case CONSTATE_CONNECTED:
     //register the bot
     snprintf(sysBuf, sizeof(sysBuf), "NICK %s", bot->nick[bot->nickAttempt]);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", bot->ident, bot->host, bot->realname);
-    bot_irc_send(&bot->conInfo, sysBuf);
-    gettimeofday(&bot->startTime, NULL);
+    bot_irc_send(bot, sysBuf);
     //go to listening state to wait for registration confirmation
     bot->state = CONSTATE_LISTENING;
     break;
 
   case CONSTATE_REGISTERED:
     snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", bot->info->channel);
-    bot_irc_send(&bot->conInfo, sysBuf);
+    bot_irc_send(bot, sysBuf);
     bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
@@ -390,6 +511,7 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
   }
   //initialize the built in commands
   botcmd_builtin(bot);
+  initMsgQueue(&bot->msgQueue);
   return 0;
 }
 
@@ -546,18 +668,10 @@ void bot_updateProcesses(BotInfo *bot) {
 
 	BotProcess *proc = bot->procQueue.current;
 	if (proc && proc->fn) {
-		struct timeval curTime = {};
-		gettimeofday(&curTime, NULL);
-
-		if (timeDiffInUS(&curTime, &proc->updated) > ONE_SEC_IN_US/MSG_PER_SECOND_LIM) {
-			gettimeofday(&proc->updated, NULL);
-	  	if ((proc->busy = proc->fn((void *)bot, proc->arg)) < 0)
-	      bot_dequeueProcess(bot, proc);
-	    else
-	    	bot->procQueue.current = proc->next;
-	  }
-	  else
-	  	bot->procQueue.current = proc->next;
+  	if ((proc->busy = proc->fn((void *)bot, proc->arg)) < 0)
+      bot_dequeueProcess(bot, proc);
+    else
+    	bot->procQueue.current = proc->next;
   }
 }
 
@@ -568,45 +682,41 @@ void bot_updateProcesses(BotInfo *bot) {
 int bot_run(BotInfo *bot) {
   int n = 0, ret = 0;
 
-  bot->conInfo.isThrottled = (bot->conInfo.throttled != bot->conInfo.lastThrottled);
-  bot->conInfo.lastThrottled = bot->conInfo.throttled;
-
-  if (!bot->joined && bot->startTime.tv_sec != 0) {
-    struct timeval current = {};
-    gettimeofday(&current, NULL);
-    if(current.tv_sec - bot->startTime.tv_sec >= REGISTER_TIMEOUT_SEC) {
+  if (!bot->joined) {
+  	TimeStamp_t currentTime = current_timestamp();
+  	if (bot->startTime == 0) bot->startTime = current_timestamp();
+    else if(currentTime - bot->startTime >= REGISTER_TIMEOUT_SEC * ONE_SEC_IN_MS) {
       bot->state = CONSTATE_REGISTERED;
-      gettimeofday(&bot->startTime, NULL);
     }
   }
+
+  //process all input first before receiving more
+  if (bot->line) {
+    if ((n = bot_parse(bot, bot->line)) < 0) return n;
+    bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
+  }
+  else {
+	  bot->line_off = NULL;
+	  memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
+
+	  if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
+	    n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
+	    if (!n) {
+	      printf("Remote closed connection\n");
+	      return -2;
+	    }
+	    else if (!bot->conInfo.enableSSL && n < 0) {
+	      perror("Response error: ");
+	      return -3;
+	    }
+	  }
+	  //parse replies one line at a time
+	  if (n > 0) bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
+	}
 
   //bot_runProcess(bot);
   bot_updateProcesses(bot);
-  //process all input first before receiving more
-  if (bot->line) {
-    if (connection_client_poll(&bot->conInfo, POLLOUT, &ret)) {
-      if ((n = bot_parse(bot, bot->line)) < 0) return n;
-      bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
-    }
-    return 0;
-  }
-
-  bot->line_off = NULL;
-  memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
-
-  if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
-    n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
-    if (!n) {
-      printf("Remote closed connection\n");
-      return -2;
-    }
-    else if (!bot->conInfo.enableSSL && n < 0) {
-      perror("Response error: ");
-      return -3;
-    }
-  }
-  //parse replies one line at a time
-  if (n > 0) bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
+  processMsgQueue(bot);
   return 0;
 }
 

@@ -14,8 +14,8 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "CHANGE ME",
-    .channel  = "#CHANGE ME"
+    .server   = "irc.freenode.net",
+    .channel  = "#derricks_bot_test"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
@@ -311,35 +311,19 @@ static int _draw(void *b, BotProcessArgs *args) {
   BotInfo *bot = (BotInfo *)b;
   FILE *input = (FILE *)args->data;
   char buf[MAX_MSG_LEN];
-  static char throttleBuf[MAX_MSG_LEN];
-
 
   if (feof(input))
     goto _fin;
 
-  if (botty_isThrottled(bot)) {
-    fprintf(stderr, "Writing throttle buf\n");
-    if (botty_say(bot, NULL, ". %s", throttleBuf) < 0)
-      goto _fin;
-  }
-  else {
-    int ret = 0;
-    if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret))
-      return 1;
+  char *s = fgets(buf, MAX_MSG_LEN, input);
+  if (!s)
+    goto _fin;
 
-    char *s = fgets(buf, MAX_MSG_LEN, input);
-    if (!s)
-      goto _fin;
+  char *newline = strchr(s, '\n');
+  if (newline) *newline = '\0';
 
-    char *newline = strchr(s, '\n');
-    if (newline) *newline = '\0';
-    memset(throttleBuf, 0, sizeof(throttleBuf));
-    memcpy(throttleBuf, buf, sizeof(buf));
-    //strncpy(throttleBuf, s, MAX_MSG_LEN);
-
-    if (botty_say(bot, NULL, ". %s", s) < 0)
-      goto _fin;
-  }
+  if (botty_say(bot, NULL, ". %s", s) < 0)
+    goto _fin;
 
   //return 1 to keep the process going
   return 1;

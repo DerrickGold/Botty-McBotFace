@@ -83,36 +83,20 @@ static int _script(void *b, BotProcessArgs *sArgs) {
   BotInfo *bot = (BotInfo *)b;
   FILE *input = (FILE *)sArgs->data;
   char *responseTarget = sArgs->target;
-
   char buf[MAX_MSG_LEN];
-  static char throttleBuf[MAX_MSG_LEN];
 
   if (feof(input))
     goto _fin;
 
-  if (botty_isThrottled(bot)) {
-    fprintf(stderr, "Writing throttlebuf\n");
-    if (botty_say(bot, responseTarget, ". %s", throttleBuf) < 0)
-      goto _fin;
-  }
-  else {
-    int ret = 0;
-    if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret))
-      return 1;
+	char *s = fgets(buf, MAX_MSG_LEN, input);
+	if (!s)
+	  goto _fin;
 
-    char *s = fgets(buf, MAX_MSG_LEN, input);
-    if (!s)
-      goto _fin;
+	char *newline = strchr(s, '\n');
+	if (newline) *newline = '\0';
+	if (botty_say(bot, responseTarget, ". %s", s) < 0)
+	  goto _fin;
 
-    char *newline = strchr(s, '\n');
-    if (newline) *newline = '\0';
-    memset(throttleBuf, 0, sizeof(throttleBuf));
-    memcpy(throttleBuf, buf, sizeof(buf));
-    //strncpy(throttleBuf, s, MAX_MSG_LEN);
-
-    if (botty_say(bot, responseTarget, ". %s", s) < 0)
-      goto _fin;
-  }
   //return 1 to keep the process going
   return 1;
 
@@ -171,31 +155,15 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
 static int _listProcesses(void *b, BotProcessArgs *pArgs) {
   BotInfo *bot = (BotInfo *)b;
   BotProcess *proc = (BotProcess *)pArgs->data;
-
   char *responseTarget = pArgs->target;
-
-  char buf[MAX_MSG_LEN];
-  static char throttleBuf[MAX_MSG_LEN];
 
   if (!proc)
     goto _fin;
 
-  if (botty_isThrottled(bot)) {
-    fprintf(stderr, "Writing throttlebuf\n");
-    if (botty_say(bot, responseTarget, ". %s", throttleBuf) < 0)
-      goto _fin;
-  }
-  else {
-    int ret = 0;
-    if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret))
-      return 1;
 
-    char *s = proc->details;
-    memset(throttleBuf, 0, sizeof(throttleBuf));
-    memcpy(throttleBuf, buf, sizeof(buf));
-    if (botty_say(bot, responseTarget, "%s", s) < 0)
-      goto _fin;
-  }
+  char *s = proc->details;
+  if (botty_say(bot, responseTarget, "%s", s) < 0)
+    goto _fin;
 
   pArgs->data = (void *)proc->next;
   //return 1 to keep the process going

@@ -6,10 +6,18 @@
 #include <string.h>
 #include <poll.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "builtin.h"
 #include "globals.h"
 #include "botapi.h"
+
+
+typedef struct ScriptPtr {
+	FILE *fh;
+	int fd;
+} ScriptPtr;
 
 /*
  * If necessary, returns where the bot received its input
@@ -73,32 +81,37 @@ static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
 
 
 static int _freeScriptArgs(void *args) {
-	FILE *pFile = (FILE *)args;
-	pclose(pFile);
+	ScriptPtr *scriptFile = (ScriptPtr *)args;
+	pclose(scriptFile->fh);
+	free(args);
 	return 0;
 }
 
 //A sample 'process' function that can be given to the bot
 static int _script(void *b, BotProcessArgs *sArgs) {
   BotInfo *bot = (BotInfo *)b;
-  FILE *input = (FILE *)sArgs->data;
+  ScriptPtr *fptr= (ScriptPtr *)sArgs->data;
   char *responseTarget = sArgs->target;
-  char buf[MAX_MSG_LEN];
+  char buf[MAX_MSG_LEN + 1];
+  memset(buf, 0, sizeof(buf));
 
-  if (feof(input))
-    goto _fin;
+  ssize_t r = read(fptr->fd, buf, MAX_MSG_LEN);
+  if (r == -1 && errno == EAGAIN) {
+  	//no data
+  	return 1;
+  }
+  else if (r > 0) {
+  	const char *delim = "\n\r\0";
 
-	char *s = fgets(buf, MAX_MSG_LEN, input);
-	if (!s)
-	  goto _fin;
+  	char *start = strtok(buf, delim);
+  	while (start) {
+  		if (botty_say(bot, responseTarget, ". %s", start) < 0)
+	  		goto _fin;
 
-	char *newline = strchr(s, '\n');
-	if (newline) *newline = '\0';
-	if (botty_say(bot, responseTarget, ". %s", s) < 0)
-	  goto _fin;
-
-  //return 1 to keep the process going
-  return 1;
+	  	start = strtok(NULL, delim);
+  	}
+		return 1;
+  }
 
   _fin:
   //return negative value to indicate the process
@@ -141,7 +154,20 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  BotProcessArgs *sArgs = bot_makeProcessArgs((void *)f, botcmd_builtin_getTarget(data), &_freeScriptArgs);
+  int fd = fileno(f);
+  fcntl(fd, F_SETFL, O_NONBLOCK);
+
+
+  ScriptPtr *scriptFile = calloc(1, sizeof(ScriptPtr));
+  if (!scriptFile) {
+  	botty_say(data->bot, responseTarget, "Error allocating memory for scriptFile ptr.");
+  	pclose(f);
+  	return 0;
+  }
+  scriptFile->fh = f;
+  scriptFile->fd = fd;
+
+  BotProcessArgs *sArgs = bot_makeProcessArgs((void *)scriptFile, botcmd_builtin_getTarget(data), &_freeScriptArgs);
   if (!sArgs) {
   	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
   	pclose(f);

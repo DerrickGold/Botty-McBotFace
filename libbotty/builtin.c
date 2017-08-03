@@ -17,6 +17,7 @@
 typedef struct ScriptPtr {
 	FILE *fh;
 	int fd;
+	char notify;
 } ScriptPtr;
 
 /*
@@ -105,9 +106,16 @@ static int _script(void *b, BotProcessArgs *sArgs) {
 
   	char *start = strtok(buf, delim);
   	while (start) {
-  		if (botty_say(bot, responseTarget, ". %s", start) < 0)
-	  		goto _fin;
-
+  		if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
+  			fptr->notify = 1;
+  		} else {
+  			if (fptr->notify) {
+  				if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
+  					goto _fin;
+  			}
+	  		else if (botty_say(bot, responseTarget, "%s", start) < 0)
+		  		goto _fin;
+  		}
 	  	start = strtok(NULL, delim);
   	}
 		return 1;

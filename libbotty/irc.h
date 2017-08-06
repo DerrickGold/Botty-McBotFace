@@ -7,8 +7,6 @@
 #include "callback.h"
 #include "connection.h"
 
-typedef long long TimeStamp_t;
-
 typedef enum {
   CONSTATE_NONE,
   CONSTATE_CONNECTED,
@@ -55,31 +53,6 @@ typedef struct BotProcessQueue {
   BotProcess *current;
 } BotProcessQueue;
 
-typedef enum {
-  QUEUED_STATE_INIT,
-  QUEUED_STATE_SENT,
-} BotQueuedMessageState;
-
-typedef struct BotQueuedMessage {
-  char msg[MAX_MSG_LEN];
-  size_t len;
-
-  //not used yet, need to determine if throttling is on a per channel basis
-  //or not.
-  char channel[MAX_CHAN_LEN];
-
-  BotQueuedMessageState status;
-  struct BotQueuedMessage *next;
-} BotQueuedMessage;
-
-typedef struct BotSendMessageQueue {
-  BotQueuedMessage *start;
-  BotQueuedMessage *end;
-  int count;
-  TimeStamp_t nextSendTimeMS;
-  int writeStatus;
-} BotSendMessageQueue;
-
 typedef struct BotInfo {
   //user config values
   int id;
@@ -107,7 +80,7 @@ typedef struct BotInfo {
   SSLConInfo conInfo;
   TimeStamp_t startTime;
 
-  BotSendMessageQueue msgQueue;
+  HashTable *msgQueues;
   //some pointer the user can use
   void *data;
 } BotInfo;

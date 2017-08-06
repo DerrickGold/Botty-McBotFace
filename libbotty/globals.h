@@ -1,6 +1,7 @@
 #ifndef __GLOBALS_H__
 #define __GLOBALS_H__
 
+#include <time.h>
 #include "hash.h"
 
 #define INFO_MSG \
@@ -13,6 +14,7 @@
   "Message length exceeds %d byte limit. Message splitting not supported yet\n"
 
 #define ILLEGAL_NICK_CHARS "-&@+%"
+#define CHANNEL_START_CHAR '#'
 #define SERVER_PREFIX "irc."
 #define CMD_CHAR '~'
 #define PARAM_DELIM ':'
@@ -57,6 +59,7 @@
 
 #define ACTION_HASH_SIZE 43
 #define COMMAND_HASH_SIZE 13
+#define QUEUE_HASH_SIZE 13
 
 typedef enum {
   IRC_ACTION_NOP = 0, IRC_ACTION_DIE, IRC_ACTION_WHO, IRC_ACTION_KICK, IRC_ACTION_NICK,
@@ -75,5 +78,15 @@ typedef enum {
 
 const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN];
 HashTable *IrcApiActions;
+
+typedef long long TimeStamp_t;
+
+
+#define botty_currentTimestamp() ({ \
+  struct timeval te; \
+  gettimeofday(&te, NULL); \
+  TimeStamp_t milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; \
+  milliseconds; \
+})
 
 #endif //__GLOBALS_H__

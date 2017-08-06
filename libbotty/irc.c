@@ -12,6 +12,7 @@
 #include "callback.h"
 #include "connection.h"
 #include "cmddata.h"
+#include "botmsgqueues.h"
 
 #define QUEUE_SEND_MSG 1
 
@@ -30,132 +31,17 @@ const char IrcApiActionText[API_ACTION_COUNT][MAX_CMD_LEN] = {
 static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
 int bot_parse(BotInfo *bot, char *line);
 
-static TimeStamp_t current_timestamp(void) {
-    struct timeval te;
-    gettimeofday(&te, NULL); // get current time
-    TimeStamp_t milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // caculate milliseconds
-    // printf("milliseconds: %lld\n", milliseconds);
-    return milliseconds;
+static int _processHashedMsgQueue(HashEntry *queueHashEntry, void *data) {
+	BotInfo *bot = (BotInfo *)data;
+	BotSendMessageQueue *queuedMessages = (BotSendMessageQueue *)queueHashEntry->data;
+	BotMsgQueue_processQueue(&bot->conInfo, queuedMessages);
+	return 0;
 }
 
-static long long calculateNextMsgTime(char throttled) {
-
-	long long curTime = current_timestamp();
-	if (throttled) curTime += THROTTLE_WAIT_SEC * ONE_SEC_IN_MS;
-	else curTime += (ONE_SEC_IN_MS/MSG_PER_SECOND_LIM);
-	return curTime;
+static void processMsgQueueHash(BotInfo *bot) {
+	HashTable_forEach(bot->msgQueues, (void *)bot, *_processHashedMsgQueue);
 }
 
-static void initMsgQueue(BotSendMessageQueue *queue) {
-	queue->nextSendTimeMS = current_timestamp();
-}
-
-static BotQueuedMessage *newQueueMsg(char *msg, char *responseTarget, size_t len) {
-	BotQueuedMessage *newMsg = calloc(1, sizeof(BotQueuedMessage));
-	if (!newMsg) {
-		fprintf(stderr, "newQueueMsg: Error allocating new message for:\n%s to %s\n", msg, responseTarget);
-		return NULL;
-	}
-	strncpy(newMsg->msg, msg, MAX_MSG_LEN);
-	strncpy(newMsg->channel, responseTarget, MAX_CHAN_LEN);
-	newMsg->status = QUEUED_STATE_INIT;
-	newMsg->len = len;
-	return newMsg;
-}
-
-static void freeQueueMsg(BotQueuedMessage *msg) {
-	free(msg);
-}
-
-static BotQueuedMessage *peekQueueMsg(BotSendMessageQueue *queue) {
-	if (!queue || !queue->start)
-		return NULL;
-
-	return queue->start;
-}
-
-static BotQueuedMessage *popQueueMsg(BotSendMessageQueue *queue) {
-	if (!queue || !queue->start)
-		return NULL;
-
-	BotQueuedMessage *poppedMsg = queue->start;
-	queue->start = poppedMsg->next;
-	if (queue->end == poppedMsg) queue->end = NULL;
-	queue->count--;
-	fprintf(stderr, "%d queued messages\n", queue->count);
-	return poppedMsg;
-}
-
-static void pushQueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
-	if (!queue || !msg)
-		return;
-
-	msg->next = queue->start;
-	if (!queue->start)
-		queue->end = msg;
-	queue->start = msg;
-	queue->count++;
-	fprintf(stderr, "%d queued messages\n", queue->count);
-}
-
-static void enqueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
-	if (!queue || !msg)
-		return;
-
-	queue->count++;
-	if (!queue->end && !queue->start) {
-		queue->start = msg;
-		queue->end = msg;
-		return;
-	}
-	queue->end->next = msg;
-	queue->end = msg;
-}
-
-static void processMsgQueue(BotInfo *bot) {
-	BotSendMessageQueue *queue = &bot->msgQueue;
-	TimeStamp_t currentTime = current_timestamp();
-	TimeStamp_t timeDiff = currentTime - queue->nextSendTimeMS;
-
-	if (timeDiff < 0) return;
-
-	if (bot_isThrottled(bot)) {
-		bot->conInfo.lastThrottled = bot->conInfo.throttled;
-		fprintf(stderr, "resetting throttle limit");
-	}
-
-	bot->conInfo.isThrottled = (bot->conInfo.throttled != bot->conInfo.lastThrottled);
-
-	int ret = 0;
-	if (!connection_client_poll(&bot->conInfo, POLLOUT, &ret)) {
-		fprintf(stderr, "processMsgQueue: socket not ready for output\n");
-		return;
-	}
-
-	BotQueuedMessage *msg = peekQueueMsg(queue);
-	if (!msg) return;
-
-	switch (msg->status) {
-		case QUEUED_STATE_INIT: {
-			msg->status = QUEUED_STATE_SENT;
-			fprintf(stdout, "SENDING (%d bytes): %s\n", (int)msg->len, msg->msg);
-			queue->writeStatus = connection_client_send(&bot->conInfo, msg->msg, msg->len);
-			queue->nextSendTimeMS = calculateNextMsgTime(0);
-		} break;
-		case QUEUED_STATE_SENT: {
-			if (bot_isThrottled(bot)) {
-				fprintf(stderr, "Throttled, will retry sending %s\n", msg->msg);
-				queue->nextSendTimeMS = calculateNextMsgTime(1);
-				msg->status = QUEUED_STATE_INIT;
-			} else {
-				fprintf(stderr, "Successfully sent: %d bytes\n", (int)msg->len);
-				msg = popQueueMsg(queue);
-				freeQueueMsg(msg);
-				queue->nextSendTimeMS = calculateNextMsgTime(0);
-			}
-		} break;
-	}
-}
 
 /*
  * Send an irc formatted message to the server.
@@ -181,8 +67,8 @@ static int _send(BotInfo *bot, char *command, char *target, char *msg, char *ctc
   }
 
   if (queued) {
-	  BotQueuedMessage *toSend = newQueueMsg(curSendBuf, target, written);
-	  if (toSend) enqueueMsg(&bot->msgQueue, toSend);
+	  BotQueuedMessage *toSend = BotQueuedMsg_newMsg(curSendBuf, target, written);
+	  if (toSend) BotMsgQueue_enqueueTargetMsg(bot->msgQueues, target, toSend);
 	  else fprintf(stderr, "Failed to queue message: %s\n", curSendBuf);
   	return 0;
   }
@@ -288,8 +174,29 @@ int bot_ctcp_send(BotInfo *bot, char *target, char *command, char *msg, ...) {
   return bot_send(bot, target, ACTION_MSG, NULL, CTCP_MARKER"%s %s"CTCP_MARKER, command, outbuf);
 }
 
+
+
+static int findThrottleTarget(HashEntry *queueHashEntry, void *data) {
+	char *serverMessage = (char *)data;
+	char *match = strstr(serverMessage, queueHashEntry->key);
+	if (match) {
+		BotSendMessageQueue *sendQueue = (BotSendMessageQueue *)queueHashEntry->data;
+		sendQueue->throttled++;
+		fprintf(stderr, "Detected throttling from: %s\n", queueHashEntry->key);
+		return 1;
+	}
+	return 0;
+}
+
+static int handleMessageThrottling(BotInfo *bot, char *serverMessage) {
+	char *result = strstr(serverMessage, THROTTLE_NEEDLE);
+  if (!result) return 0;
+  return HashTable_forEach(bot->msgQueues, (void *)serverMessage, &findThrottleTarget);
+}
+
 /*
  * Default actions for handling various server responses such as nick collisions
+ * or throttling
  */
 static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   //if nick is already registered, try a new one
@@ -326,12 +233,7 @@ static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   }
   //attempt to detect any messages indicating throttling
   else if (!strncmp(msg->action, NOTICE_ACTION, strlen(NOTICE_ACTION))) {
-    char *result = strstr(msg->msgTok[0], THROTTLE_NEEDLE);
-    if (result) {
-      bot->conInfo.throttled += (result != NULL);
-      fprintf(stderr, "Detected throttling!\n");
-      return 1;
-    }
+  	return handleMessageThrottling(bot, msg->msgTok[0]);
   }
 
   return 0;
@@ -520,7 +422,13 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
   }
   //initialize the built in commands
   botcmd_builtin(bot);
-  initMsgQueue(&bot->msgQueue);
+
+  bot->msgQueues = HashTable_init(QUEUE_HASH_SIZE);
+  if (!IrcApiActions) {
+    fprintf(stderr, "Error initializing Bot Message Queue hash\n");
+    return -1;
+  }
+
   return 0;
 }
 
@@ -562,6 +470,8 @@ void bot_cleanup(BotInfo *bot) {
   bot_purgeNames(bot);
   if (bot->commands) command_cleanup(bot->commands);
   bot->commands = NULL;
+  if (bot->msgQueues) BotMsgQueues_cleanQueues(bot->msgQueues);
+  bot->msgQueues = NULL;
   close(bot->conInfo.servfds.fd);
   freeaddrinfo(bot->conInfo.res);
 }
@@ -691,8 +601,8 @@ int bot_run(BotInfo *bot) {
   int n = 0, ret = 0;
 
   if (!bot->joined) {
-  	TimeStamp_t currentTime = current_timestamp();
-  	if (bot->startTime == 0) bot->startTime = current_timestamp();
+  	TimeStamp_t currentTime = botty_currentTimestamp();
+  	if (bot->startTime == 0) bot->startTime = botty_currentTimestamp();
     else if(currentTime - bot->startTime >= REGISTER_TIMEOUT_SEC * ONE_SEC_IN_MS) {
       bot->state = CONSTATE_REGISTERED;
     }
@@ -724,7 +634,8 @@ int bot_run(BotInfo *bot) {
 
   //bot_runProcess(bot);
   bot_updateProcesses(bot);
-  processMsgQueue(bot);
+  //processMsgQueue(bot);
+  processMsgQueueHash(bot);
   return 0;
 }
 

@@ -19,5 +19,3 @@ void botty_cleanup(BotInfo *bot) {
   if (--ircRefCount == 0) bot_irc_cleanup();
 }
 
-
-

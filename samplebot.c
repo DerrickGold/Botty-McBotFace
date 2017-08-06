@@ -14,14 +14,14 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "CHANGE ME",
-    .channel  = "#CHANGE ME"
+    .server   = "CHANGE THIS",
+    .channel  = "#CHANGE THIS"
   },
   .host     = "CIRCBotHost",
   .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "BassAceGold",
+  .master   = "Derrick",
   .useSSL   = 1
 };
 /*=====================================================
@@ -310,6 +310,7 @@ static int _draw_free(void *a) {
 static int _draw(void *b, BotProcessArgs *args) {
   BotInfo *bot = (BotInfo *)b;
   FILE *input = (FILE *)args->data;
+  char *responseTarget = args->target;
   char buf[MAX_MSG_LEN];
 
   if (feof(input))
@@ -322,7 +323,7 @@ static int _draw(void *b, BotProcessArgs *args) {
   char *newline = strchr(s, '\n');
   if (newline) *newline = '\0';
 
-  if (botty_say(bot, NULL, ". %s", s) < 0)
+  if (botty_say(bot, responseTarget, ". %s", s) < 0)
     goto _fin;
 
   //return 1 to keep the process going
@@ -355,7 +356,7 @@ int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  BotProcessArgs *sArgs = bot_makeProcessArgs((void *)f, responseTarget, &_draw_free);
+  BotProcessArgs *sArgs = botty_makeProcessArgs((void *)f, responseTarget, &_draw_free);
   if (!sArgs) {
     botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
     fclose(f);
@@ -365,7 +366,7 @@ int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
   //initialize and start the draw process
   //A process will block all input for a given bot until
   //it has completed the assigned process.
-  bot_queueProcess(data->bot, &_draw, sArgs, script, caller);
+  botty_runProcess(data->bot, &_draw, sArgs, script, caller);
   return 0;
 }
 
@@ -655,7 +656,7 @@ int links_print(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  BotProcessArgs *sArgs = bot_makeProcessArgs((void*)&ListOfLinks, responseTarget, NULL);
+  BotProcessArgs *sArgs = botty_makeProcessArgs((void*)&ListOfLinks, responseTarget, NULL);
   if (!sArgs) {
     botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
     return 0;
@@ -663,7 +664,7 @@ int links_print(void *i, char *args[MAX_BOT_ARGS]) {
 
   ListOfLinks.lastPos = ListOfLinks.head;
   botty_say(data->bot, NULL, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
-  bot_queueProcess(data->bot, &links_print_process, sArgs, script, caller);
+  botty_runProcess(data->bot, &links_print_process, sArgs, script, caller);
   return 0;
 }
 

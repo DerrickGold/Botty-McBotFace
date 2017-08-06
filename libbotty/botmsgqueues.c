@@ -148,12 +148,13 @@ void BotMsgQueue_processQueue(SSLConInfo *conInfo, BotSendMessageQueue *queue) {
 
 static int cleanQueue(HashEntry *entry, void *data) {
   if (entry->data) {
-  	BotSendMessageQueue *queue = (BotSendMessageQueue *)data;
+  	BotSendMessageQueue *queue = (BotSendMessageQueue *)entry->data;
+  	fprintf(stderr, "Cleaning message queue: %s: %d\n", entry->key, queue->count);
   	while (queue->count > 0) {
   		BotQueuedMessage *msg = popQueueMsg(queue);
-  		freeQueueMsg(msg);
+  		if (msg) freeQueueMsg(msg);
   	}
-  	free(entry->data);
+  	free(queue);
   }
   return 0;
 }

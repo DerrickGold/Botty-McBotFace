@@ -12,6 +12,7 @@
 #include "builtin.h"
 #include "globals.h"
 #include "botapi.h"
+#include "botprocqueue.h"
 
 
 typedef struct ScriptPtr {
@@ -76,7 +77,6 @@ static int botcmd_builtin_source(void *i, char *args[MAX_BOT_ARGS]) {
 static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
   //botty_say(data->bot, NULL, "Seeya!");
-  botty_send(data->bot, NULL, ACTION_MSG, NULL, "Seeya!");
   bot_irc_send(data->bot, "QUIT :leaving");
   return -1;
 }
@@ -125,7 +125,7 @@ static int _script(void *b, BotProcessArgs *sArgs) {
   _fin:
   //return negative value to indicate the process
   //is complete
-  bot_freeProcessArgs(sArgs);
+  BotProcess_freeArgs(sArgs);
   return -1;
 }
 
@@ -176,14 +176,14 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
   scriptFile->fh = f;
   scriptFile->fd = fd;
 
-  BotProcessArgs *sArgs = bot_makeProcessArgs((void *)scriptFile, botcmd_builtin_getTarget(data), &_freeScriptArgs);
+  BotProcessArgs *sArgs = BotProcess_makeArgs((void *)scriptFile, botcmd_builtin_getTarget(data), &_freeScriptArgs);
   if (!sArgs) {
   	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
   	pclose(f);
   	return 0;
   }
 
-  bot_queueProcess(data->bot, &_script, sArgs, script, caller);
+  BotProcess_queueProcess(&data->bot->procQueue, &_script, sArgs, script, caller);
   return 0;
 }
 
@@ -207,7 +207,7 @@ static int _listProcesses(void *b, BotProcessArgs *pArgs) {
   _fin:
   //return negative value to indicate the process
   //is complete
-  bot_freeProcessArgs(pArgs);
+  BotProcess_freeArgs(pArgs);
   return -1;
 }
 
@@ -223,13 +223,13 @@ int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
   	return 0;
   }
 
-  BotProcessArgs *pArgs = bot_makeProcessArgs((void*)data->bot->procQueue.head, responseTarget, NULL);
+  BotProcessArgs *pArgs = BotProcess_makeArgs((void*)data->bot->procQueue.head, responseTarget, NULL);
   if (!pArgs) {
   	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
   	return 0;
   }
 
-  bot_queueProcess(data->bot, &_listProcesses, pArgs, script, caller);
+  BotProcess_queueProcess(&data->bot->procQueue, &_listProcesses, pArgs, script, caller);
   return 0;
 }
 
@@ -250,14 +250,14 @@ int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
   	return 0;
   }
 
-  BotProcess *toTerminate = bot_findProcessByPid(data->bot, pid);
+  BotProcess *toTerminate = BotProcess_findProcessByPid(&data->bot->procQueue, pid);
   if (!toTerminate) {
   	botty_say(data->bot, responseTarget, "%s: Failed to find process with PID: %d.", caller, pid);
   	return 0;
   }
 
 
-  bot_dequeueProcess(data->bot, toTerminate);
+  BotProcess_dequeueProcess(&data->bot->procQueue, toTerminate);
   botty_say(data->bot, responseTarget, "%s: terminated process with PID: %d.", caller, pid);
   return 0;
 }

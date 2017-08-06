@@ -6,6 +6,7 @@
 #include "commands.h"
 #include "callback.h"
 #include "connection.h"
+#include "botprocqueue.h"
 
 typedef enum {
   CONSTATE_NONE,
@@ -25,33 +26,6 @@ typedef struct IrcInfo {
   char server[MAX_SERV_LEN];
   char channel[MAX_CHAN_LEN];
 } IrcInfo;
-
-
-typedef int (*BotProcessArgsFreeFn)(void *);
-
-typedef struct BotProcessArgs {
-  void *data;
-  char *target;
-  BotProcessArgsFreeFn free;
-} BotProcessArgs;
-
-typedef int (*BotProcessFn)(void *, BotProcessArgs *);
-
-typedef struct BotProcess {
-  BotProcessFn fn;
-  BotProcessArgs *arg;
-  char busy;
-  struct BotProcess *next;
-  unsigned int pid;
-  char details[MAX_MSG_LEN];
-} BotProcess;
-
-typedef struct BotProcessQueue {
-  int count;
-  unsigned int pidTicker;
-  BotProcess *head;
-  BotProcess *current;
-} BotProcessQueue;
 
 typedef struct BotInfo {
   //user config values
@@ -99,16 +73,6 @@ int bot_connect(BotInfo *info);
 char *bot_getNick(BotInfo *bot);
 
 void bot_cleanup(BotInfo *info);
-
-BotProcessArgs *bot_makeProcessArgs(void *data, char *responseTarget, BotProcessArgsFreeFn fn);
-
-void bot_freeProcessArgs(BotProcessArgs *args);
-
-void bot_queueProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
-
-void bot_dequeueProcess(BotInfo *bot, BotProcess *process);
-
-BotProcess *bot_findProcessByPid(BotInfo *bot, unsigned int pid);
 
 void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
 

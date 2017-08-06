@@ -8,10 +8,15 @@
 #include "irc.h"
 #include "cmddata.h"
 #include "builtin.h"
+#include "botprocqueue.h"
 
 int botty_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
 void botty_cleanup(BotInfo *bot);
+
+void botty_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
+
+
 
 //returns void
 #define botty_addCommand(bot, cmd, flags, args, fn) \
@@ -50,5 +55,8 @@ void botty_cleanup(BotInfo *bot);
 
 #define botty_isThrottled(bot) \
   bot_isThrottled(bot)
+
+#define botty_makeProcessArgs(data, target, fn) \
+  BotProcess_makeArgs(data, target, fn)
 
 #endif //__BOT_API_H__

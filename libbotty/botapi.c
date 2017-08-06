@@ -19,3 +19,7 @@ void botty_cleanup(BotInfo *bot) {
   if (--ircRefCount == 0) bot_irc_cleanup();
 }
 
+
+void botty_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller) {
+	BotProcess_queueProcess(&bot->procQueue, fn, args, cmd, caller);
+}

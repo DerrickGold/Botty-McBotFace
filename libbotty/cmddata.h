@@ -9,5 +9,4 @@ typedef struct CmdData {
   IrcMsg *msg;
 } CmdData;
 
-
 #endif //__CMDDATA_H__

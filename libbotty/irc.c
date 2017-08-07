@@ -32,14 +32,14 @@ static IRC_API_Actions IrcApiActionValues[API_ACTION_COUNT];
 int bot_parse(BotInfo *bot, char *line);
 
 static int _processHashedMsgQueue(HashEntry *queueHashEntry, void *data) {
-	BotInfo *bot = (BotInfo *)data;
-	BotSendMessageQueue *queuedMessages = (BotSendMessageQueue *)queueHashEntry->data;
-	BotMsgQueue_processQueue(&bot->conInfo, queuedMessages);
-	return 0;
+  BotInfo *bot = (BotInfo *)data;
+  BotSendMessageQueue *queuedMessages = (BotSendMessageQueue *)queueHashEntry->data;
+  BotMsgQueue_processQueue(&bot->conInfo, queuedMessages);
+  return 0;
 }
 
 static void processMsgQueueHash(BotInfo *bot) {
-	HashTable_forEach(bot->msgQueues, (void *)bot, *_processHashedMsgQueue);
+  HashTable_forEach(bot->msgQueues, (void *)bot, *_processHashedMsgQueue);
 }
 
 
@@ -49,7 +49,7 @@ static void processMsgQueueHash(BotInfo *bot) {
  * message.
  */
 static int _send(BotInfo *bot, char *command, char *target, char *msg, char *ctcp, char queued) {
-	SSLConInfo *conInfo = &bot->conInfo;
+  SSLConInfo *conInfo = &bot->conInfo;
   char curSendBuf[MAX_MSG_LEN];
   int written = 0;
   char *sep = PARAM_DELIM_STR;
@@ -67,10 +67,10 @@ static int _send(BotInfo *bot, char *command, char *target, char *msg, char *ctc
   }
 
   if (queued) {
-	  BotQueuedMessage *toSend = BotQueuedMsg_newMsg(curSendBuf, target, written);
-	  if (toSend) BotMsgQueue_enqueueTargetMsg(bot->msgQueues, target, toSend);
-	  else fprintf(stderr, "Failed to queue message: %s\n", curSendBuf);
-  	return 0;
+    BotQueuedMessage *toSend = BotQueuedMsg_newMsg(curSendBuf, target, written, bot->procQueue.curPid);
+    if (toSend) BotMsgQueue_enqueueTargetMsg(bot->msgQueues, target, toSend);
+    else fprintf(stderr, "Failed to queue message: %s\n", curSendBuf);
+    return 0;
   }
 
   fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);
@@ -177,19 +177,19 @@ int bot_ctcp_send(BotInfo *bot, char *target, char *command, char *msg, ...) {
 
 
 static int findThrottleTarget(HashEntry *queueHashEntry, void *data) {
-	char *serverMessage = (char *)data;
-	char *match = strstr(serverMessage, queueHashEntry->key);
-	if (match) {
-		BotSendMessageQueue *sendQueue = (BotSendMessageQueue *)queueHashEntry->data;
-		sendQueue->throttled++;
-		fprintf(stderr, "Detected throttling from: %s\n", queueHashEntry->key);
-		return 1;
-	}
-	return 0;
+  char *serverMessage = (char *)data;
+  char *match = strstr(serverMessage, queueHashEntry->key);
+  if (match) {
+    BotSendMessageQueue *sendQueue = (BotSendMessageQueue *)queueHashEntry->data;
+    sendQueue->throttled++;
+    fprintf(stderr, "Detected throttling from: %s\n", queueHashEntry->key);
+    return 1;
+  }
+  return 0;
 }
 
 static int handleMessageThrottling(BotInfo *bot, char *serverMessage) {
-	char *result = strstr(serverMessage, THROTTLE_NEEDLE);
+  char *result = strstr(serverMessage, THROTTLE_NEEDLE);
   if (!result) return 0;
   return HashTable_forEach(bot->msgQueues, (void *)serverMessage, &findThrottleTarget);
 }
@@ -233,7 +233,7 @@ static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   }
   //attempt to detect any messages indicating throttling
   else if (!strncmp(msg->action, NOTICE_ACTION, strlen(NOTICE_ACTION))) {
-  	return handleMessageThrottling(bot, msg->msgTok[0]);
+    return handleMessageThrottling(bot, msg->msgTok[0]);
   }
 
   return 0;
@@ -472,7 +472,7 @@ void bot_cleanup(BotInfo *bot) {
   bot_purgeNames(bot);
   if (bot->commands) command_cleanup(bot->commands);
   bot->commands = NULL;
-  if (bot->msgQueues) BotMsgQueues_cleanQueues(bot->msgQueues);
+  if (bot->msgQueues) BotMsgQueue_cleanQueues(bot->msgQueues);
   bot->msgQueues = NULL;
 
   close(bot->conInfo.servfds.fd);
@@ -496,8 +496,8 @@ int bot_run(BotInfo *bot) {
   int n = 0, ret = 0;
 
   if (!bot->joined) {
-  	TimeStamp_t currentTime = botty_currentTimestamp();
-  	if (bot->startTime == 0) bot->startTime = botty_currentTimestamp();
+    TimeStamp_t currentTime = botty_currentTimestamp();
+    if (bot->startTime == 0) bot->startTime = botty_currentTimestamp();
     else if(currentTime - bot->startTime >= REGISTER_TIMEOUT_SEC * ONE_SEC_IN_MS) {
       bot->state = CONSTATE_REGISTERED;
     }
@@ -509,23 +509,23 @@ int bot_run(BotInfo *bot) {
     bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
   }
   else {
-	  bot->line_off = NULL;
-	  memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
+    bot->line_off = NULL;
+    memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
 
-	  if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
-	    n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
-	    if (!n) {
-	      printf("Remote closed connection\n");
-	      return -2;
-	    }
-	    else if (!bot->conInfo.enableSSL && n < 0) {
-	      perror("Response error: ");
-	      return -3;
-	    }
-	  }
-	  //parse replies one line at a time
-	  if (n > 0) bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
-	}
+    if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
+      n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
+      if (!n) {
+        printf("Remote closed connection\n");
+        return -2;
+      }
+      else if (!bot->conInfo.enableSSL && n < 0) {
+        perror("Response error: ");
+        return -3;
+      }
+    }
+    //parse replies one line at a time
+    if (n > 0) bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
+  }
 
   //bot_runProcess(bot);
   BotProcess_updateProcessQueue(&bot->procQueue, (void *)bot);

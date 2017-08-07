@@ -13,12 +13,13 @@
 #include "globals.h"
 #include "botapi.h"
 #include "botprocqueue.h"
+#include "botmsgqueues.h"
 
 
 typedef struct ScriptPtr {
-	FILE *fh;
-	int fd;
-	char notify;
+  FILE *fh;
+  int fd;
+  char notify;
 } ScriptPtr;
 
 /*
@@ -83,10 +84,10 @@ static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
 
 
 static int _freeScriptArgs(void *args) {
-	ScriptPtr *scriptFile = (ScriptPtr *)args;
-	pclose(scriptFile->fh);
-	free(args);
-	return 0;
+  ScriptPtr *scriptFile = (ScriptPtr *)args;
+  pclose(scriptFile->fh);
+  free(args);
+  return 0;
 }
 
 //A sample 'process' function that can be given to the bot
@@ -99,27 +100,27 @@ static int _script(void *b, BotProcessArgs *sArgs) {
 
   ssize_t r = read(fptr->fd, buf, MAX_MSG_LEN);
   if (r == -1 && errno == EAGAIN) {
-  	//no data
-  	return 1;
+    //no data
+    return 1;
   }
   else if (r > 0) {
-  	const char *delim = "\n\r\0";
+    const char *delim = "\n\r\0";
 
-  	char *start = strtok(buf, delim);
-  	while (start) {
-  		if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
-  			fptr->notify = 1;
-  		} else {
-  			if (fptr->notify) {
-  				if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
-  					goto _fin;
-  			}
-	  		else if (botty_say(bot, responseTarget, "%s", start) < 0)
-		  		goto _fin;
-  		}
-	  	start = strtok(NULL, delim);
-  	}
-		return 1;
+    char *start = strtok(buf, delim);
+    while (start) {
+      if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
+        fptr->notify = 1;
+      } else {
+        if (fptr->notify) {
+          if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
+            goto _fin;
+        }
+        else if (botty_say(bot, responseTarget, "%s", start) < 0)
+          goto _fin;
+      }
+      start = strtok(NULL, delim);
+    }
+    return 1;
   }
 
   _fin:
@@ -149,13 +150,13 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
   struct stat st = {};
   snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s", script);
   if (stat(fullCmd, &st) == -1) {
-  	botty_say(data->bot, responseTarget, "%s: script does not exist.", data->msg->nick);
-  	return 0;
+    botty_say(data->bot, responseTarget, "%s: script does not exist.", data->msg->nick);
+    return 0;
   }
   if (scriptArgs)
-	  snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s %s"SCRIPT_OUTPUT_REDIRECT, script, caller, scriptArgs);
-	else
-		snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s"SCRIPT_OUTPUT_REDIRECT, script, caller);
+    snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s %s"SCRIPT_OUTPUT_REDIRECT, script, caller, scriptArgs);
+  else
+    snprintf(fullCmd, cmdLen, SCRIPTS_DIR"%s %s"SCRIPT_OUTPUT_REDIRECT, script, caller);
 
   FILE *f = popen(fullCmd, "r");
   if (!f) {
@@ -169,21 +170,22 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
 
   ScriptPtr *scriptFile = calloc(1, sizeof(ScriptPtr));
   if (!scriptFile) {
-  	botty_say(data->bot, responseTarget, "Error allocating memory for scriptFile ptr.");
-  	pclose(f);
-  	return 0;
+    botty_say(data->bot, responseTarget, "Error allocating memory for scriptFile ptr.");
+    pclose(f);
+    return 0;
   }
   scriptFile->fh = f;
   scriptFile->fd = fd;
 
   BotProcessArgs *sArgs = BotProcess_makeArgs((void *)scriptFile, botcmd_builtin_getTarget(data), &_freeScriptArgs);
   if (!sArgs) {
-  	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
-  	pclose(f);
-  	return 0;
+    botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
+    pclose(f);
+    return 0;
   }
 
-  BotProcess_queueProcess(&data->bot->procQueue, &_script, sArgs, script, caller);
+  unsigned int pid = BotProcess_queueProcess(&data->bot->procQueue, &_script, sArgs, script, caller);
+  botty_say(data->bot, responseTarget, "%s: started '%s' with pid: %d.", caller, script, pid);
   return 0;
 }
 
@@ -212,21 +214,21 @@ static int _listProcesses(void *b, BotProcessArgs *pArgs) {
 }
 
 int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
-	CmdData *data = (CmdData *)i;
+  CmdData *data = (CmdData *)i;
 
-	char *script = "[BuiltIn] List Process";
+  char *script = "[BuiltIn] List Process";
   char *caller = data->msg->nick;
   char *responseTarget = botcmd_builtin_getTarget(data);
 
   if (!data->bot->procQueue.head) {
-  	botty_say(data->bot, responseTarget, "%s: There are no running processes", caller);
-  	return 0;
+    botty_say(data->bot, responseTarget, "%s: There are no running processes", caller);
+    return 0;
   }
 
   BotProcessArgs *pArgs = BotProcess_makeArgs((void*)data->bot->procQueue.head, responseTarget, NULL);
   if (!pArgs) {
-  	botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
-  	return 0;
+    botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
+    return 0;
   }
 
   BotProcess_queueProcess(&data->bot->procQueue, &_listProcesses, pArgs, script, caller);
@@ -234,30 +236,32 @@ int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
 }
 
 int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
-	CmdData *data = (CmdData *)i;
+  CmdData *data = (CmdData *)i;
 
   char *caller = data->msg->nick;
   char *responseTarget = botcmd_builtin_getTarget(data);
 
   if (!args[1]) {
-  	botty_say(data->bot, responseTarget, "%s: Please specify a PID to terminate.", caller);
-  	return 0;
+    botty_say(data->bot, responseTarget, "%s: Please specify a PID to terminate.", caller);
+    return 0;
   }
 
   unsigned int pid = atoi(args[1]);
   if (!pid) {
-  	botty_say(data->bot, responseTarget, "%s: Invalid PID specified.", caller);
-  	return 0;
+    botty_say(data->bot, responseTarget, "%s: Invalid PID specified.", caller);
+    return 0;
   }
 
+  int cleared = BotMsgQueue_rmPidMsg(data->bot->msgQueues, responseTarget, pid);
+  fprintf(stderr, "Cleared %d pid messages from queue\n", cleared);
   BotProcess *toTerminate = BotProcess_findProcessByPid(&data->bot->procQueue, pid);
-  if (!toTerminate) {
-  	botty_say(data->bot, responseTarget, "%s: Failed to find process with PID: %d.", caller, pid);
-  	return 0;
+  if (!toTerminate && !cleared) {
+    botty_say(data->bot, responseTarget, "%s: Failed to find process with PID: %d.", caller, pid);
+    return 0;
   }
+  else if (toTerminate)
+    BotProcess_dequeueProcess(&data->bot->procQueue, toTerminate);
 
-
-  BotProcess_dequeueProcess(&data->bot->procQueue, toTerminate);
   botty_say(data->bot, responseTarget, "%s: terminated process with PID: %d.", caller, pid);
   return 0;
 }

@@ -13,12 +13,9 @@ typedef enum {
 
 typedef struct BotQueuedMessage {
   char msg[MAX_MSG_LEN];
-  size_t len;
-
-  //not used yet, need to determine if throttling is on a per channel basis
-  //or not.
   char channel[MAX_CHAN_LEN];
-
+  size_t len;
+  unsigned int createdByPid;
   BotQueuedMessageState status;
   struct BotQueuedMessage *next;
 } BotQueuedMessage;
@@ -33,10 +30,11 @@ typedef struct BotSendMessageQueue {
   int throttled, lastThrottled;
 } BotSendMessageQueue;
 
-BotQueuedMessage *BotQueuedMsg_newMsg(char *msg, char *responseTarget, size_t len);
+BotQueuedMessage *BotQueuedMsg_newMsg(char *msg, char *responseTarget, size_t len, unsigned int createdByPid);
 void BotMsgQueue_enqueueTargetMsg(HashTable *msgQueues, char *target, BotQueuedMessage *msg);
 void BotMsgQueue_processQueue(SSLConInfo *conInfo, BotSendMessageQueue *queue);
 void BotMsgQueue_setThrottle(HashTable *msgQueues, char *target);
-void BotMsgQueues_cleanQueues(HashTable *msgQueues);
+void BotMsgQueue_cleanQueues(HashTable *msgQueues);
+int BotMsgQueue_rmPidMsg(HashTable *msgQueues, char *target, unsigned int pid);
 
 #endif //__LIBBOTTY_IRC_MSGQUEUE_H__

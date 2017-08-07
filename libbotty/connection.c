@@ -7,14 +7,14 @@
 #include "connection.h"
 
 static int setNonBlock(int fd, char value) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0)
-        return errno;
-
-    if (value)
-        return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-
-    return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0)
+    return errno;
+  
+  if (value)
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+  
+  return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 }
 
 /*
@@ -51,8 +51,8 @@ static int socketConnect(int sockfd, struct addrinfo *res) {
     }
 
     if (r != POLLOUT) {
-        close(sockfd);
-        fprintf(stderr, "connect: %s: %d\n", strerror(errno), errno);
+      close(sockfd);
+      fprintf(stderr, "connect: %s: %d\n", strerror(errno), errno);
     }
   }
 

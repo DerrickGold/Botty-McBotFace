@@ -17,6 +17,7 @@ typedef struct BotProcess {
   BotProcessFn fn;
   BotProcessArgs *arg;
   char busy;
+  char terminate;
   struct BotProcess *next;
   unsigned int pid;
   char details[MAX_MSG_LEN];
@@ -33,9 +34,10 @@ typedef struct BotProcessQueue {
 BotProcessArgs *BotProcess_makeArgs(void *data, char *responseTarget, BotProcessArgsFreeFn fn);
 void BotProcess_freeArgs(BotProcessArgs *args);
 unsigned int BotProcess_queueProcess(BotProcessQueue *procQueue, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
-void BotProcess_dequeueProcess(BotProcessQueue *procQueue, BotProcess *process);
+unsigned int BotProcess_dequeueProcess(BotProcessQueue *procQueue, BotProcess *process);
 BotProcess *BotProcess_findProcessByPid(BotProcessQueue *procQueue, unsigned int pid);
-void BotProcess_updateProcessQueue(BotProcessQueue *procQueue, void *botInfo);
+unsigned int BotProcess_updateProcessQueue(BotProcessQueue *procQueue, void *botInfo);
 void BotProcess_freeProcesaQueue(BotProcessQueue *procQueue);
+void BotProcess_terminate(BotProcess *process);
 
 #endif //__LIBBOTTY_IRC_PROCESSQUEUE_H__

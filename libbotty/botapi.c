@@ -21,5 +21,5 @@ void botty_cleanup(BotInfo *bot) {
 
 
 void botty_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller) {
-  BotProcess_queueProcess(&bot->procQueue, fn, args, cmd, caller);
+  bot_runProcess(bot, fn, args, cmd, caller);
 }

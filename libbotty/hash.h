@@ -33,6 +33,7 @@ typedef struct HashTable {
  */
 HashEntry *HashEntry_create(char *key, void *data);
 
+void HashEntry_destroy(HashEntry *data);
 /*
  * HashTable_init
  *  Initialize a hash table instance.
@@ -65,7 +66,7 @@ void HashTable_destroy(HashTable *table);
  * Arguments:
  *  table: HashEntry table instance to search in
  *  key: Key to look up entry with
- *  
+ *
  * Returns:
  *  A pointer to a location in the hash table where the
  *  entry should reside. Does not return the entry itself.
@@ -91,7 +92,7 @@ HashEntry **HashTable_add(HashTable *table, HashEntry *data);
 
 /*
  * HashTable_find:
- *  A wrapper for HashTable_getEntry. Retreive a entry 
+ *  A wrapper for HashTable_getEntry. Retreive a entry
  *  from a hash table.
  *
  * Arguments:
@@ -102,6 +103,8 @@ HashEntry **HashTable_add(HashTable *table, HashEntry *data);
  *  A pointer to a entry instance.
  */
 HashEntry *HashTable_find(HashTable *table, char *key);
+
+HashEntry *HashTable_rm(HashTable *table, HashEntry *data);
 
 
 int HashTable_forEach(HashTable *table, void *data, int (*fn) (HashEntry *, void *));

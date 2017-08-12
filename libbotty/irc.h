@@ -55,6 +55,7 @@ typedef struct BotInfo {
   TimeStamp_t startTime;
 
   HashTable *msgQueues;
+  HashTable *pidResponseMap;
   //some pointer the user can use
   void *data;
 } BotInfo;
@@ -93,5 +94,7 @@ void bot_purgeNames(BotInfo *bot);
 void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data));
 
 int bot_isThrottled(BotInfo *bot);
+
+void bot_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
 
 #endif //__IRC_H__

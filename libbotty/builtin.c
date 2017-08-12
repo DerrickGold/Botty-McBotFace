@@ -22,6 +22,12 @@ typedef struct ScriptPtr {
   char notify;
 } ScriptPtr;
 
+typedef struct ClearQueueContainer{
+	HashTable *msgQueues;
+	unsigned int pid;
+} ClearQueueContainer;
+
+
 /*
  * If necessary, returns where the bot received its input
  * as to respond in the appropriate place.
@@ -104,12 +110,10 @@ static int _script(void *b, BotProcessArgs *sArgs) {
     return 1;
   }
   else if (r > 0) {
-    const char *delim = "\n\r\0";
-
-    char *start = strtok(buf, delim);
+    char *start = strtok(buf, SCRIPT_OUTPIT_DELIM);
     while (start) {
       if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
-        fptr->notify = 1;
+        fptr->notify = (fptr->notify + 1) % 2;
       } else {
         if (fptr->notify) {
           if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
@@ -118,7 +122,7 @@ static int _script(void *b, BotProcessArgs *sArgs) {
         else if (botty_say(bot, responseTarget, "%s", start) < 0)
           goto _fin;
       }
-      start = strtok(NULL, delim);
+      start = strtok(NULL, SCRIPT_OUTPIT_DELIM);
     }
     return 1;
   }
@@ -184,8 +188,8 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  unsigned int pid = BotProcess_queueProcess(&data->bot->procQueue, &_script, sArgs, script, caller);
-  botty_say(data->bot, responseTarget, "%s: started '%s' with pid: %d.", caller, script, pid);
+  bot_runProcess(data->bot, &_script, sArgs, script, caller);
+  //botty_say(data->bot, responseTarget, "%s: started '%s' with pid: %d.", caller, script, pid);
   return 0;
 }
 
@@ -231,8 +235,14 @@ int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  BotProcess_queueProcess(&data->bot->procQueue, &_listProcesses, pArgs, script, caller);
+  bot_runProcess(data->bot, &_listProcesses, pArgs, script, caller);
   return 0;
+}
+
+
+static int _clearQueueHelper(HashEntry *entry, void *clearQueueContainer) {
+	ClearQueueContainer *container = clearQueueContainer;
+	return BotMsgQueue_rmPidMsg(container->msgQueues, entry->key, container->pid);
 }
 
 int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
@@ -252,15 +262,17 @@ int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  int cleared = BotMsgQueue_rmPidMsg(data->bot->msgQueues, responseTarget, pid);
+  ClearQueueContainer container = {data->bot->msgQueues, pid};
+  int cleared = HashTable_forEach(data->bot->msgQueues, (void *)&container, &_clearQueueHelper);
   fprintf(stderr, "Cleared %d pid messages from queue\n", cleared);
+
   BotProcess *toTerminate = BotProcess_findProcessByPid(&data->bot->procQueue, pid);
   if (!toTerminate && !cleared) {
     botty_say(data->bot, responseTarget, "%s: Failed to find process with PID: %d.", caller, pid);
     return 0;
   }
   else if (toTerminate)
-    BotProcess_dequeueProcess(&data->bot->procQueue, toTerminate);
+  	BotProcess_terminate(toTerminate);
 
   botty_say(data->bot, responseTarget, "%s: terminated process with PID: %d.", caller, pid);
   return 0;

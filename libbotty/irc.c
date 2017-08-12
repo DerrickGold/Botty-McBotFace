@@ -42,7 +42,6 @@ static void processMsgQueueHash(BotInfo *bot) {
   HashTable_forEach(bot->msgQueues, (void *)bot, *_processHashedMsgQueue);
 }
 
-
 /*
  * Send an irc formatted message to the server.
  * Assumes your message is appropriately sized for a single
@@ -424,9 +423,15 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
   botcmd_builtin(bot);
 
   bot->msgQueues = HashTable_init(QUEUE_HASH_SIZE);
-  if (!IrcApiActions) {
+  if (!bot->msgQueues) {
     fprintf(stderr, "Error initializing Bot Message Queue hash\n");
     return -1;
+  }
+
+  bot->pidResponseMap = HashTable_init(QUEUE_HASH_SIZE);
+  if (!bot->pidResponseMap) {
+  	fprintf(stderr, "Error initialize bot pid target map\n");
+  	return -1;
   }
 
   return 0;
@@ -527,9 +532,7 @@ int bot_run(BotInfo *bot) {
     if (n > 0) bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
   }
 
-  //bot_runProcess(bot);
   BotProcess_updateProcessQueue(&bot->procQueue, (void *)bot);
-  //processMsgQueue(bot);
   processMsgQueueHash(bot);
   return 0;
 }
@@ -602,4 +605,9 @@ void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *da
 
 int bot_isThrottled(BotInfo *bot) {
   return bot->conInfo.isThrottled;
+}
+
+void bot_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller) {
+  unsigned int pid = BotProcess_queueProcess(&bot->procQueue, fn, args, cmd, caller);
+  bot_send(bot, caller, ACTION_MSG, NULL, "%s: started '%s' with pid: %d.", caller, cmd, pid);
 }

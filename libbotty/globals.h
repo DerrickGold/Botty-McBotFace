@@ -30,6 +30,7 @@
 #define SCRIPTS_DIR "scripts/"
 #define SCRIPT_OUTPUT_REDIRECT " 2>&1 &"
 #define SCRIPT_OUTPUT_MODE_TOKEN "#__NOTIFY_ALL__#"
+#define SCRIPT_OUTPIT_DELIM "\n\r\0"
 
 #define ONE_SEC_IN_NS 999999999
 #define ONE_SEC_IN_US 1000000

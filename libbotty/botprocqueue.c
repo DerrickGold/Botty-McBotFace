@@ -64,9 +64,10 @@ unsigned int BotProcess_queueProcess(BotProcessQueue *procQueue, BotProcessFn fn
   return process->pid;
 }
 
-void BotProcess_dequeueProcess(BotProcessQueue *procQueue, BotProcess *process) {
-  if (!process) return;
+unsigned int BotProcess_dequeueProcess(BotProcessQueue *procQueue, BotProcess *process) {
+  if (!process) return 0;
 
+  unsigned int pid = process->pid;
   if (procQueue->head != process) {
     BotProcess *proc = procQueue->head;
     while (proc->next != process) {
@@ -87,6 +88,7 @@ void BotProcess_dequeueProcess(BotProcessQueue *procQueue, BotProcess *process) 
 
   fprintf(stderr, "bot_queueProcess: Removed process:\n %s\n", process->details);
   free(process);
+  return pid;
 }
 
 BotProcess *BotProcess_findProcessByPid(BotProcessQueue *procQueue, unsigned int pid) {
@@ -104,22 +106,28 @@ BotProcess *BotProcess_findProcessByPid(BotProcessQueue *procQueue, unsigned int
   return process;
 }
 
-void BotProcess_updateProcessQueue(BotProcessQueue *procQueue, void *botInfo) {
+unsigned int BotProcess_updateProcessQueue(BotProcessQueue *procQueue, void *botInfo) {
+	unsigned int terminatedPid = 0;
   if (!procQueue->current)
     procQueue->current = procQueue->head;
 
   BotProcess *proc = procQueue->current;
   if (proc && proc->fn) {
     procQueue->curPid = procQueue->current->pid;
-    if ((proc->busy = proc->fn(botInfo, proc->arg)) < 0)
-      BotProcess_dequeueProcess(procQueue, proc);
+    if (proc->terminate || (proc->busy = proc->fn(botInfo, proc->arg)) < 0)
+      terminatedPid = BotProcess_dequeueProcess(procQueue, proc);
     else
       procQueue->current = proc->next;
   }
   procQueue->curPid = 0;
+  return terminatedPid;
 }
 
 void BotProcess_freeProcesaQueue(BotProcessQueue *procQueue) {
   while (procQueue->count > 0 && procQueue->head)
     BotProcess_dequeueProcess(procQueue, procQueue->head);
+}
+
+void BotProcess_terminate(BotProcess *process) {
+	process->terminate = 1;
 }

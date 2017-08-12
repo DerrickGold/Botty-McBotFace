@@ -14,7 +14,7 @@
 #define GROWTH_RATE 0.21f
 
 static size_t growSize(size_t oldSize) {
-  
+
   return oldSize  + (size_t)floor(oldSize * GROWTH_RATE);
 }
 
@@ -26,7 +26,7 @@ HashEntry *HashEntry_create(char *key, void *data) {
     fprintf(stderr, "Error allocating hash data\n");
     return NULL;
   }
-  
+
   //set the key to whatever the token was pointing at
   entry->key = key;
   entry->data = data;
@@ -74,20 +74,20 @@ HashEntry **HashTable_getEntry(HashTable *table, char *key) {
   //no table entries allocated?
   if (!curPos)
     return NULL;
-    
+
   //if first attempt and nothing exists, return the free position
   if (!*curPos)
     return curPos;
 
   //otherwise, check that we've got the right one
   int attempt = 0;
-  
+
   do {
     HashEntry *entry = *curPos;
-    
+
     if (!strcmp(key, entry->key))
       return curPos;
-    
+
     //pos = (pos + attempt) % table->size;
     pos = hash1(key, table->size, pos + (attempt<<1));
     curPos = &table->entries[pos];
@@ -105,7 +105,7 @@ int HashTable_copy(HashTable *dest, HashTable *src) {
   //make sure the dest table is at least as large as the source
   if (dest->size < src->size)
     return -1;
-  
+
   //rehash all entries and copy them over
   for (size_t e = 0; e < src->size; e++) {
 
@@ -124,7 +124,7 @@ int HashTable_copy(HashTable *dest, HashTable *src) {
     else {
       return -1;
     }
-    
+
   }
 
   return 0;
@@ -157,7 +157,7 @@ void HashTable_destroy(HashTable *table) {
   if (!table)
     return;
 
-  if (table->entries) {    
+  if (table->entries) {
     HashTable_forEach(table, NULL, entryDestroyHelper);
     free(table->entries);
   }
@@ -180,13 +180,13 @@ int HashTable_resize(HashTable *table, size_t size) {
 
     status = HashTable_copy(newTable, table);
 
-    //error copying data, resize the table 
+    //error copying data, resize the table
     if (status) {
       size = growSize(size);
       free(newTable);
     }
   } while (status);
-    
+
   //then free old table, and assign new table
   free(table->entries);
 
@@ -199,16 +199,16 @@ int HashTable_resize(HashTable *table, size_t size) {
 }
 
 int HashTable_forEach(HashTable *table, void *data, int (*fn) (HashEntry *, void *)) {
-  
+
   if (!table || !fn)
     return 0;
-  
+
   //loop through all symbol table entries
   for (size_t i = 0; i < table->size; i++) {
 
     //skip entries where key may not be set (malformed entries)
     HashEntry *entry = table->entries[i];
-    
+
     //skip empty entries
     if (!entry)
       continue;
@@ -231,9 +231,9 @@ HashEntry **HashTable_add(HashTable *table, HashEntry *data) {
   if (table->count >= table->size)
     HashTable_resize(table, growSize(table->size));
 
-       
+
   HashEntry **position = HashTable_getEntry(table, data->key);
-  
+
   if (!position) {
     HashTable_resize(table, growSize(table->size));
     //try adding the data again
@@ -247,6 +247,24 @@ HashEntry **HashTable_add(HashTable *table, HashEntry *data) {
   //if this statement is false, that means an entry already
   //exists for a given key, just return that data instead
   return position;
+}
+
+HashEntry *HashTable_rm(HashTable *table, HashEntry *data) {
+
+  if (!table || !table->entries)
+   return NULL;
+
+  HashEntry **position = HashTable_getEntry(table, data->key);
+  if (!position) {
+  	//entry does not exist in hash table
+  	return NULL;
+  }
+
+  HashEntry *toRemove = *position;
+  *position = NULL;
+  table->count--;
+
+  return toRemove;
 }
 
 HashEntry *HashTable_find(HashTable *table, char *key) {

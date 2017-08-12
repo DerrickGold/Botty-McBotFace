@@ -278,6 +278,43 @@ int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+
+int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
+	CmdData *data = (CmdData *)cmdData;
+
+	char *caller = data->msg->nick;
+  	char *responseTarget = botcmd_builtin_getTarget(data);
+
+  	if (!args[1]) {
+  		botty_say(data->bot, responseTarget, "%s: Alias format follows: [alias] [text to alias] -> Missing arguments", caller);
+  		return 0;
+  	}
+
+  	if (!args[2]) {
+  		botty_say(data->bot, responseTarget, "%s: Missing text to alias to: %s", caller, args[1]);
+  		return 0;
+  	}
+
+  	if (!bot_registerAlias(data->bot, args[1], args[2])) {
+  		//botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, args[1], args[2]);
+  		CmdAlias *alias = command_alias_get(data->bot->cmdAliases, args[1]);
+  		if (alias) {
+  			char argList[MAX_MSG_LEN];
+  			memset(argList, 0, MAX_MSG_LEN - 1);
+  			size_t offset = 0;
+  			for (int i = 0; i < alias->argc; i++) {
+  				offset += snprintf(argList + offset, MAX_MSG_LEN - offset, "%s, ", alias->args[i]);
+  			}
+  			botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, args[1], argList);
+  		}
+  		return 0;
+  	}
+  	botty_say(data->bot, responseTarget, "%s: Failed to create alias for '%s' -> '%s'", caller, args[1], args[2]);
+  	return 0;
+}
+
+
+
 /*
  * Initialize the built in commands provided in this file.
  */
@@ -289,5 +326,6 @@ int botcmd_builtin(BotInfo *bot) {
   bot_addcommand(bot, "script", 0, 3, &botcmd_builtin_script);
   bot_addcommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
   bot_addcommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
+  bot_addcommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
   return 0;
 }

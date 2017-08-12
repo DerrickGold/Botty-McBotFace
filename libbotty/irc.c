@@ -346,7 +346,7 @@ int bot_parse(BotInfo *bot, char *line) {
     }
     else {
       BotCmd *cmd = NULL;
-      IrcMsg *msg = ircMsg_irc_new(line, bot->commands, &cmd);
+      IrcMsg *msg = ircMsg_irc_new(line, bot->commands, bot->cmdAliases, &cmd);
       IRC_API_Actions action = IRC_ACTION_NOP;
       HashEntry *a = HashTable_find(IrcApiActions, msg->action);
 
@@ -428,9 +428,9 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
     return -1;
   }
 
-  bot->pidResponseMap = HashTable_init(QUEUE_HASH_SIZE);
-  if (!bot->pidResponseMap) {
-  	fprintf(stderr, "Error initialize bot pid target map\n");
+  bot->cmdAliases = HashTable_init(ALIAS_HASH_SIZE);
+  if (!bot->cmdAliases) {
+  	fprintf(stderr, "Error initialize bot cmd alias hash\n");
   	return -1;
   }
 
@@ -610,4 +610,9 @@ int bot_isThrottled(BotInfo *bot) {
 void bot_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller) {
   unsigned int pid = BotProcess_queueProcess(&bot->procQueue, fn, args, cmd, caller);
   bot_send(bot, caller, ACTION_MSG, NULL, "%s: started '%s' with pid: %d.", caller, cmd, pid);
+}
+
+
+int bot_registerAlias(BotInfo *bot, char *alias, char *cmd) {
+	return command_reg_alias(bot->commands, bot->cmdAliases, alias, cmd);
 }

@@ -6,7 +6,7 @@
 #include "ircmsg.h"
 
 
-IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, BotCmd **cmd) {
+IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, BotCmd **cmd) {
   IrcMsg *msg = NULL;
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
@@ -57,6 +57,14 @@ IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, BotCmd **cmd) {
       if (i == 0) {
         *cmd = command_get(cmdTable, msg->msgTok[0]);
         if (*cmd)  argCount = (*cmd)->args;
+        else {
+        	CmdAlias *alias = command_alias_get(cmdAliases, msg->msgTok[0]);
+        	if (alias) {
+        		*cmd = alias->cmd;
+        		argCount = alias->cmd->args;
+        		for (; i < alias->argc; i++) msg->msgTok[i] = alias->args[i];
+        	}
+        }
       }
 
       if (!tok_off) break;

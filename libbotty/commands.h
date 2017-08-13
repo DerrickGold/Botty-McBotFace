@@ -3,6 +3,11 @@
 
 #include "globals.h"
 
+#define ALIAS_ERR_CMDEXISTS -7
+#define ALIAS_ERR_CMDNOTFOUND -3
+#define ALIAS_ERR_ALREADYEXISTS -8
+#define ALIAS_ERR_NONE 0
+
 typedef enum {
   CMDFLAG_MASTER = (1<<0),
 } CommandFlags;

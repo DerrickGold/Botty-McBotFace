@@ -279,37 +279,57 @@ int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
 }
 
 
+
 int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
 	CmdData *data = (CmdData *)cmdData;
 
 	char *caller = data->msg->nick;
   	char *responseTarget = botcmd_builtin_getTarget(data);
+  	char *alias = args[1];
+  	char *replaceWith = args[2];
 
-  	if (!args[1]) {
+  	if (!alias) {
   		botty_say(data->bot, responseTarget, "%s: Alias format follows: [alias] [text to alias] -> Missing arguments", caller);
   		return 0;
   	}
-
-  	if (!args[2]) {
-  		botty_say(data->bot, responseTarget, "%s: Missing text to alias to: %s", caller, args[1]);
+  	else if (!replaceWith) {
+  		botty_say(data->bot, responseTarget, "%s: Missing text to alias to: %s", caller, alias);
   		return 0;
   	}
 
-  	if (!bot_registerAlias(data->bot, args[1], args[2])) {
-  		//botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, args[1], args[2]);
-  		CmdAlias *alias = command_alias_get(data->bot->cmdAliases, args[1]);
-  		if (alias) {
-  			char argList[MAX_MSG_LEN];
-  			memset(argList, 0, MAX_MSG_LEN - 1);
-  			size_t offset = 0;
-  			for (int i = 0; i < alias->argc; i++) {
-  				offset += snprintf(argList + offset, MAX_MSG_LEN - offset, "%s, ", alias->args[i]);
-  			}
-  			botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, args[1], argList);
-  		}
-  		return 0;
+  	switch(bot_registerAlias(data->bot, alias, replaceWith)) {
+  		default:
+  			botty_say(data->bot, responseTarget, "%s: Failed to create alias for '%s' -> '%s'", caller, args[1], args[2]);
+	  		break;
+
+	  	case ALIAS_ERR_NONE: {
+	  		//botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, args[1], args[2]);
+	  		CmdAlias *aliasEntry = command_alias_get(data->bot->cmdAliases, alias);
+	  		if (alias) {
+	  			char argList[MAX_MSG_LEN];
+	  			memset(argList, 0, MAX_MSG_LEN - 1);
+	  			size_t offset = 0;
+	  			for (int i = 0; i < aliasEntry->argc; i++) {
+	  				offset += snprintf(argList + offset, MAX_MSG_LEN - offset, "%s, ", aliasEntry->args[i]);
+	  			}
+	  			botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, alias, argList);
+	  		}
+	  		return 0;
+	  	}	break;
+
+	  	case ALIAS_ERR_CMDEXISTS:
+	  		botty_say(data->bot, responseTarget, "%s: Cannot override existing command '%s' as an alias\n", caller, alias);
+	  		break;
+
+	  	case ALIAS_ERR_CMDNOTFOUND:
+	  		botty_say(data->bot, responseTarget, "%s: Alias '%s' must call a built in command: '%s' has no known command.\n", caller, alias, replaceWith);
+	  		break;
+
+	  	case ALIAS_ERR_ALREADYEXISTS:
+	  		botty_say(data->bot, responseTarget, "%s: Alias '%s' already defined.\n", caller, alias);
+	  		break;
   	}
-  	botty_say(data->bot, responseTarget, "%s: Failed to create alias for '%s' -> '%s'", caller, args[1], args[2]);
+
   	return 0;
 }
 

@@ -256,8 +256,8 @@ HashEntry *HashTable_rm(HashTable *table, HashEntry *data) {
 
   HashEntry **position = HashTable_getEntry(table, data->key);
   if (!position) {
-  	//entry does not exist in hash table
-  	return NULL;
+    //entry does not exist in hash table
+    return NULL;
   }
 
   HashEntry *toRemove = *position;
@@ -273,6 +273,5 @@ HashEntry *HashTable_find(HashTable *table, char *key) {
   if (!position || !*position) {
     return NULL;
   }
-
   return *position;
 }

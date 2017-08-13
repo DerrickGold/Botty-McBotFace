@@ -430,8 +430,8 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
 
   bot->cmdAliases = HashTable_init(ALIAS_HASH_SIZE);
   if (!bot->cmdAliases) {
-  	fprintf(stderr, "Error initialize bot cmd alias hash\n");
-  	return -1;
+    fprintf(stderr, "Error initialize bot cmd alias hash\n");
+    return -1;
   }
 
   return 0;
@@ -614,5 +614,5 @@ void bot_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *c
 
 
 int bot_registerAlias(BotInfo *bot, char *alias, char *cmd) {
-	return command_reg_alias(bot->commands, bot->cmdAliases, alias, cmd);
+  return command_reg_alias(bot->commands, bot->cmdAliases, alias, cmd);
 }

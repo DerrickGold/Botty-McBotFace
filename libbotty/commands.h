@@ -20,10 +20,10 @@ typedef struct BotCmd {
 } BotCmd;
 
 typedef struct CmdAlias {
-	BotCmd *cmd;
-	char *args[MAX_BOT_ARGS];
-	int argc;
-	char *replaceWith;
+  BotCmd *cmd;
+  char *args[MAX_BOT_ARGS];
+  int argc;
+  char *replaceWith;
 } CmdAlias;
 
 typedef int (*CommandFn)(void *, char *a[MAX_BOT_ARGS]);

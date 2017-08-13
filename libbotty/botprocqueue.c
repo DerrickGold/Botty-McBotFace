@@ -107,7 +107,7 @@ BotProcess *BotProcess_findProcessByPid(BotProcessQueue *procQueue, unsigned int
 }
 
 unsigned int BotProcess_updateProcessQueue(BotProcessQueue *procQueue, void *botInfo) {
-	unsigned int terminatedPid = 0;
+  unsigned int terminatedPid = 0;
   if (!procQueue->current)
     procQueue->current = procQueue->head;
 
@@ -129,5 +129,5 @@ void BotProcess_freeProcesaQueue(BotProcessQueue *procQueue) {
 }
 
 void BotProcess_terminate(BotProcess *process) {
-	process->terminate = 1;
+  process->terminate = 1;
 }

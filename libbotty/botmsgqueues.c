@@ -84,8 +84,16 @@ void BotMsgQueue_enqueueTargetMsg(HashTable *msgQueues, char *target, BotQueuedM
       fprintf(stderr, "Error creating message queue for target: %s\n", target);
       return;
     }
+    size_t targetLen = strlen(target);
+    char *queueKey = calloc(1, targetLen + 1);
+    if (!queueKey) {
+      fprintf(stderr, "Error creating queue name: %s\n", target);
+      return;
+    }
+    strncpy(queueKey, target, targetLen);
+
     initMsgQueue(newQueue);
-    targetQueue = HashEntry_create(target, (void*)newQueue);
+    targetQueue = HashEntry_create(queueKey, (void*)newQueue);
     HashTable_add(msgQueues, targetQueue);
   }
 
@@ -153,6 +161,7 @@ static int cleanQueue(HashEntry *entry, void *data) {
       if (msg) freeQueueMsg(msg);
     }
     free(queue);
+    free(entry->key);
   }
   return 0;
 }

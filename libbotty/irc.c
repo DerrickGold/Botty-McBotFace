@@ -176,6 +176,9 @@ int bot_ctcp_send(BotInfo *bot, char *target, char *command, char *msg, ...) {
 
 
 static int findThrottleTarget(HashEntry *queueHashEntry, void *data) {
+	if (strlen(queueHashEntry->key) == 0)
+		return 0;
+
   char *serverMessage = (char *)data;
   char *match = strstr(serverMessage, queueHashEntry->key);
   if (match) {

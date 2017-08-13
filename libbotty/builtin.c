@@ -350,6 +350,19 @@ int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
 }
 
 
+static int _listAliasHelper(HashEntry *entry, void *cmdData) {
+  CmdAlias *aliasEntry = (CmdAlias *)entry->data;
+  _printAlias(cmdData, aliasEntry, entry->key);
+  return 0;
+}
+
+static int botcmd_builtin_listAliases(void *cmdData, char *args[MAX_BOT_ARGS]) {
+  BotInfo *bot = (BotInfo *)((CmdData *)cmdData)->bot;
+  HashTable_forEach(bot->cmdAliases, cmdData, &_listAliasHelper);
+  return 0;
+}
+
+
 
 /*
  * Initialize the built in commands provided in this file.
@@ -363,5 +376,6 @@ int botcmd_builtin(BotInfo *bot) {
   bot_addcommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
   bot_addcommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
   bot_addcommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
+  bot_addcommand(bot, "lsalias", 0, 1, &botcmd_builtin_listAliases);
   return 0;
 }

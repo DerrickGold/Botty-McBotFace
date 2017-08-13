@@ -1,0 +1,6 @@
+#!/bin/bash
+
+caller=$1
+location=$2
+
+curl "wttr.in/$location" 2> /dev/null | head -n 7 | sed "s,$(printf '\033')\\[[0-9;]*[a-zA-Z],,g"

@@ -138,11 +138,11 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
 
   aliasData->cmd = regCmd;
   aliasData->args[0] = aliasData->cmd->cmd;
+  aliasData->argc = 1;
   fprintf(stderr, "ALIAS ARG[0]: %s\n", aliasData->args[0]);
   if (tok_off) {
     tok = tok_off + 1;
     int i = 1;
-    aliasData->argc = 1;
     while(tok < replaceWithEnd && i < regCmd->args) {
       tok_off = strchr(tok, BOT_ARG_DELIM);
       if (tok_off && i < regCmd->args - 1) *tok_off = '\0';

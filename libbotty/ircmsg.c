@@ -62,7 +62,10 @@ IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, 
           if (alias) {
             *cmd = alias->cmd;
             argCount = alias->cmd->args;
-            for (; i < alias->argc; i++) msg->msgTok[i] = alias->args[i];
+            for (i = 0; i < alias->argc; i++)
+              msg->msgTok[i] = alias->args[i];
+
+            i--;
           }
         }
       }

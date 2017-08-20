@@ -7,6 +7,7 @@
 #include "callback.h"
 #include "connection.h"
 #include "botprocqueue.h"
+#include "botinputqueue.h"
 
 typedef enum {
   CONSTATE_NONE,
@@ -41,7 +42,7 @@ typedef struct BotInfo {
 
   //connection state info
   char recvbuf[MAX_MSG_LEN];
-  char *line, *line_off;
+  char *line_off;
   ConState state;
   int nickAttempt;
 
@@ -56,6 +57,8 @@ typedef struct BotInfo {
 
   HashTable *msgQueues;
   HashTable *cmdAliases;
+
+  BotInputQueue inputQueue;
   //some pointer the user can use
   void *data;
 } BotInfo;

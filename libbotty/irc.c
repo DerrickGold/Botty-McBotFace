@@ -437,6 +437,7 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
     return -1;
   }
 
+  BotInputQueue_initQueue(&bot->inputQueue);
   return 0;
 }
 
@@ -511,28 +512,36 @@ int bot_run(BotInfo *bot) {
     }
   }
 
-  //process all input first before receiving more
-  if (bot->line) {
-    if ((n = bot_parse(bot, bot->line)) < 0) return n;
-    bot->line = strtok_r(NULL, "\r\n", &bot->line_off);
-  }
-  else {
-    bot->line_off = NULL;
-    memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
-
-    if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
-      n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
-      if (!n) {
-        printf("Remote closed connection\n");
-        return -2;
-      }
-      else if (!bot->conInfo.enableSSL && n < 0) {
-        perror("Response error: ");
-        return -3;
-      }
+  //read from wire
+  memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
+  if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
+    n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
+    if (!n) {
+      printf("Remote closed connection\n");
+      return -2;
     }
-    //parse replies one line at a time
-    if (n > 0) bot->line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
+    else if (!bot->conInfo.enableSSL && n < 0) {
+      perror("Response error: ");
+      return -3;
+    }
+  }  
+  //add all messages to input queue
+  if (n > 0) {
+    char *line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
+    while (line) {
+      BotInputQueue_enqueueInput(&bot->inputQueue, line);
+      line = strtok_r(NULL, "\r\n", &bot->line_off);
+    }
+  }
+
+  //grab next message in queue to process
+  if (BotInputQueue_len(&bot->inputQueue) > 0) {
+    BotQueuedInput *nextInput = BotInputQueue_dequeueInput(&bot->inputQueue);
+    if (nextInput) {
+      if ((n = bot_parse(bot, nextInput->msg)) < 0) return n;
+      BotInput_freeQueuedInput(nextInput);
+      nextInput = NULL;
+    }
   }
 
   BotProcess_updateProcessQueue(&bot->procQueue, (void *)bot);

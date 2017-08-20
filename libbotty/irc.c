@@ -176,8 +176,8 @@ int bot_ctcp_send(BotInfo *bot, char *target, char *command, char *msg, ...) {
 
 
 static int findThrottleTarget(HashEntry *queueHashEntry, void *data) {
-	if (strlen(queueHashEntry->key) == 0)
-		return 0;
+  if (strlen(queueHashEntry->key) == 0)
+    return 0;
 
   char *serverMessage = (char *)data;
   char *match = strstr(serverMessage, queueHashEntry->key);
@@ -484,6 +484,8 @@ void bot_cleanup(BotInfo *bot) {
   if (bot->msgQueues) BotMsgQueue_cleanQueues(bot->msgQueues);
   bot->msgQueues = NULL;
 
+  BotInputQueue_clearQueue(&bot->inputQueue);
+  
   close(bot->conInfo.servfds.fd);
   freeaddrinfo(bot->conInfo.res);
 }

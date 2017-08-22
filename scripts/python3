@@ -1,3 +1,5 @@
 #!/bin/bash
 
-python3 -c "$1"
+caller="$1"
+script="$2"
+python3 -c "$script"

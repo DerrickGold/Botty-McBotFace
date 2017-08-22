@@ -333,16 +333,16 @@ int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
     } break;
 
     case ALIAS_ERR_CMDEXISTS:
-      botty_say(data->bot, responseTarget, "%s: Cannot override existing command '%s' as an alias\n", caller, alias);
+      botty_say(data->bot, responseTarget, "%s: Cannot override existing command '%s' as an alias", caller, alias);
       break;
 
     case ALIAS_ERR_CMDNOTFOUND:
-      botty_say(data->bot, responseTarget, "%s: Alias '%s' must call a built in command: '%s' has no known command.\n",
+      botty_say(data->bot, responseTarget, "%s: Alias '%s' must call a built in command: '%s' has no known command.",
                 caller, alias, replaceWith);
       break;
 
     case ALIAS_ERR_ALREADYEXISTS:
-      botty_say(data->bot, responseTarget, "%s: Alias '%s' already defined.\n", caller, alias);
+      botty_say(data->bot, responseTarget, "%s: Alias '%s' already defined.", caller, alias);
       break;
   }
 
@@ -362,6 +362,32 @@ static int botcmd_builtin_listAliases(void *cmdData, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+static int botcmd_builtin_rmAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)cmdData;
+  BotInfo *bot = (BotInfo *)data->bot;
+  char *alias = args[1];
+  char *caller = data->msg->nick;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+
+  if (!alias) {
+    botty_say(data->bot, responseTarget, "%s: Please specify an alias to delete.", caller);
+    return 0;
+  }
+  
+  HashEntry *aliasEntry = HashTable_find(bot->cmdAliases, alias);
+  if (!aliasEntry) {
+    botty_say(data->bot, responseTarget, "%s: Alias '%s' does not exist.", caller);
+    return 0;
+  }
+
+  if (HashTable_rm(bot->cmdAliases, aliasEntry) != NULL) {
+    command_alias_free(aliasEntry);
+    HashEntry_destroy(aliasEntry);
+    botty_say(data->bot, responseTarget, "%s: Deleted alias: %s", caller, alias);
+  }
+  
+  return 0;
+}
 
 
 /*
@@ -377,5 +403,6 @@ int botcmd_builtin(BotInfo *bot) {
   bot_addcommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
   bot_addcommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
   bot_addcommand(bot, "lsalias", 0, 1, &botcmd_builtin_listAliases);
+  bot_addcommand(bot, "rmalias", 0, 2, &botcmd_builtin_rmAlias);
   return 0;
 }

@@ -42,4 +42,6 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
 
 CmdAlias *command_alias_get(HashTable *cmdAliases, char *alias);
 
+void command_alias_free(HashEntry *entry);
+
 #endif //__COMMANDS_H__

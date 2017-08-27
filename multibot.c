@@ -15,7 +15,7 @@
 IrcInfo server = {
   .port     = "6667",
   .server   = "CHANGETHIS",
-  .channel  = "#CHANGETHIS"
+  .channel  = {"#CHANGETHIS", "\0", "\0", "\0", "\0"}
 };
 
 //Set up two bots for the same server and channel

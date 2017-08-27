@@ -140,7 +140,12 @@ int bot_irc_send(BotInfo *bot, char *msg) {
 
 static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *fmt, va_list a) {
   char *msgBuf;
-  if (!target) target = bot->info->channel;
+  if (!target) {
+    //target = bot->info->channel;
+    fprintf(stderr, "_botSend: No response target provided!\n");
+    return 0;
+  }
+    
 
   //only buffer up to 4 message splits worth of text
   size_t msgBufLen = MAX_MSG_LEN * MAX_MSG_SPLITS;
@@ -329,13 +334,25 @@ int bot_parse(BotInfo *bot, char *line) {
     break;
 
   case CONSTATE_REGISTERED:
-    snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", bot->info->channel);
-    bot_irc_send(bot, sysBuf);
+    for (int i = 0; i < MAX_CONNECTED_CHANS; i++) {
+      char *chan = bot->info->channel[i];
+      if (*chan == '\0') continue;
+      fprintf(stderr, "CONNECTING TO: %s...\n", chan);
+      snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", chan);
+      bot_irc_send(bot, sysBuf);
+    }
     bot->state = CONSTATE_JOINED;
     break;
   case CONSTATE_JOINED:
     bot->joined = 1;
-    callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, NULL);
+    for (int i = 0; i < MAX_CONNECTED_CHANS; i++) {
+      char *chan = bot->info->channel[i];
+      if (*chan == '\0') continue;
+      IrcMsg *msg = ircMsg_newMsg();
+      ircMsg_setChannel(msg, chan);
+      callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, msg);
+      free(msg);
+    }
     bot->state = CONSTATE_LISTENING;
     break;
   default:

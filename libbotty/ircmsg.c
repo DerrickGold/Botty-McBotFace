@@ -5,18 +5,31 @@
 #include "globals.h"
 #include "ircmsg.h"
 
+IrcMsg *ircMsg_newMsg(void) {
+  IrcMsg *msg = NULL;
+  msg = calloc(1, sizeof(IrcMsg));
+  if (!msg) {
+    fprintf(stderr, "[FATAL] IrcMsg alloc error\n");
+    exit(1);    
+  }
+
+  return msg;
+}
+
+void ircMsg_setChannel(IrcMsg *msg, char *channel) {
+  if (!channel) {
+    fprintf(stderr, "Could not set NULL channel to IrcMsg\n");
+    return;
+  }
+  strncpy(msg->channel, channel, MAX_CHAN_LEN);
+}
+
 
 IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, BotCmd **cmd) {
-  IrcMsg *msg = NULL;
+  IrcMsg *msg = ircMsg_newMsg();
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
   int i = 0;
-
-  msg = calloc(1, sizeof(IrcMsg));
-  if (!msg) {
-    fprintf(stderr, "msg alloc error\n");
-    exit(1);
-  }
 
   //first get the nick that created the message
   tok = strtok_r(input, "!", &tok_off);
@@ -81,16 +94,10 @@ IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, 
 }
 
 IrcMsg *ircMsg_server_new(char *input) {
-  IrcMsg *msg = NULL;
+  IrcMsg *msg = ircMsg_newMsg();;
   int i = 0;
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
-
-  msg = calloc(1, sizeof(IrcMsg));
-  if (!msg) {
-    fprintf(stderr, "msg alloc error\n");
-    exit(1);
-  }
 
   msg->server = 1;
   //skip the server
@@ -123,3 +130,5 @@ IrcMsg *ircMsg_server_new(char *input) {
 
   return msg;
 }
+
+

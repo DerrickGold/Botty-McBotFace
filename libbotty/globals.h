@@ -44,6 +44,7 @@
 //before giving up registering to the server
 #define NICK_ATTEMPTS 3
 
+#define MAX_CONNECTED_CHANS 5
 #define MAX_MSG_LEN 512
 #define MAX_MSG_SPLITS 4
 #define MAX_SERV_LEN 63

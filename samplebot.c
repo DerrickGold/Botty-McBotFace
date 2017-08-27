@@ -15,13 +15,13 @@ BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
     .server   = "irc.freenode.net",
-    .channel  = "#derricks_bot_test"
+    .channel  = {"#CHANGEME", "\0", "\0", "\0", "\0"}
   },
   .host     = "CIRCBotHost",
-  .nick     = {"Mr_Meeseeks", "DrawBot", "CIrcBot3"},
+  .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "BassAceGold",
+  .master   = "Derrick",
   .useSSL   = 1
 };
 /*=====================================================
@@ -106,7 +106,7 @@ static int onConnect(void *data, IrcMsg *msg) {
 }
 
 static int onJoin(void *data, IrcMsg *msg) {
-  botty_say((BotInfo *)data, NULL, "Hello, World!");
+  botty_say((BotInfo *)data, msg->channel, "Hello, World!");
   return 0;
 }
 

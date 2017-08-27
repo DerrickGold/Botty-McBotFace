@@ -25,7 +25,7 @@ typedef struct NickList {
 typedef struct IrcInfo {
   char port[6];
   char server[MAX_SERV_LEN];
-  char channel[MAX_CHAN_LEN];
+  char channel[MAX_CONNECTED_CHANS][MAX_CHAN_LEN];
 } IrcInfo;
 
 typedef struct BotInfo {

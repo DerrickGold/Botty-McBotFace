@@ -15,7 +15,8 @@ typedef struct IrcMsg {
 } IrcMsg;
 
 IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, BotCmd **cmd);
-
 IrcMsg *ircMsg_server_new(char *input);
+IrcMsg *ircMsg_newMsg(void);
+void ircMsg_setChannel(IrcMsg *msg, char *channel);
 
 #endif

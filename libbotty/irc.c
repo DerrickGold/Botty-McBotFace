@@ -295,9 +295,10 @@ int bot_parse(BotInfo *bot, char *line) {
   fprintf(stdout, "SERVER: %s\n", line);
 
   //respond to server pings
-  if (!strncmp(line, "PING", strlen("PING"))) {
-    char *pong = line + strlen("PING") + 1;
-    snprintf(sysBuf, sizeof(sysBuf), "PONG %s", pong);
+  if (!strncmp(line, PING_STR, strlen(PING_STR))) {
+    //find the start of the token we are supposed to pong with
+    char *pongTok = line + strlen(PING_STR) + 1;
+    snprintf(sysBuf, sizeof(sysBuf), PONG_STR" %s", pongTok);
     bot_irc_send(bot, sysBuf);
     return 0;
   }
@@ -311,7 +312,7 @@ int bot_parse(BotInfo *bot, char *line) {
     if (space) {
       //grab new server name if we've been redirected
       memcpy(bot->info->server, space+1, strlen(space) - 1);
-      printf("given server: %s\n", bot->info->server);
+      fprintf(stderr, "given server: %s\n", bot->info->server);
     }
     callback_call_r(bot->cb, CALLBACK_CONNECT, (void*)bot, NULL);
     bot->state = CONSTATE_CONNECTED;
@@ -319,16 +320,16 @@ int bot_parse(BotInfo *bot, char *line) {
 
   case CONSTATE_CONNECTED:
     //register the bot
-    snprintf(sysBuf, sizeof(sysBuf), "NICK %s", bot->nick[bot->nickAttempt]);
+    snprintf(sysBuf, sizeof(sysBuf), NICK_CMD_STR" %s", bot->nick[bot->nickAttempt]);
     bot_irc_send(bot, sysBuf);
-    snprintf(sysBuf, sizeof(sysBuf), "USER %s %s test: %s", bot->ident, bot->host, bot->realname);
+    snprintf(sysBuf, sizeof(sysBuf), USER_CMD_STR" %s %s test: %s", bot->ident, bot->host, bot->realname);
     bot_irc_send(bot, sysBuf);
     //go to listening state to wait for registration confirmation
     bot->state = CONSTATE_LISTENING;
     break;
 
   case CONSTATE_REGISTERED:
-    snprintf(sysBuf, sizeof(sysBuf), "JOIN %s", bot->info->channel);
+    snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", bot->info->channel);
     bot_irc_send(bot, sysBuf);
     bot->state = CONSTATE_JOINED;
     break;
@@ -456,16 +457,6 @@ int bot_connect(BotInfo *bot) {
   bot->conInfo.servfds.fd = connection_client_init(bot->info->server, bot->info->port, &bot->conInfo.res);
   if (bot->conInfo.servfds.fd < 0) exit(1);
   bot->conInfo.servfds.events = POLLIN | POLLPRI | POLLOUT | POLLWRBAND;
-
-  int n = strlen(SERVER_PREFIX);
-  if (strncmp(SERVER_PREFIX, bot->info->server, n)) {
-    int servLen = strlen(bot->info->server);
-    if (servLen + n < MAX_SERV_LEN) {
-      memmove(bot->info->server + n, bot->info->server, servLen);
-      memcpy(bot->info->server, SERVER_PREFIX, n);
-      printf("NEW SERVER NAME: %s\n", bot->info->server);
-    }
-  }
   return 0;
 }
 
@@ -506,7 +497,7 @@ void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) 
 int bot_run(BotInfo *bot) {
   int n = 0, ret = 0;
 
-  if (!bot->joined) {
+  if (!bot->joined && bot->state == CONSTATE_LISTENING) {
     TimeStamp_t currentTime = botty_currentTimestamp();
     if (bot->startTime == 0) bot->startTime = botty_currentTimestamp();
     else if(currentTime - bot->startTime >= REGISTER_TIMEOUT_SEC * ONE_SEC_IN_MS) {
@@ -519,7 +510,7 @@ int bot_run(BotInfo *bot) {
   if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
     n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
     if (!n) {
-      printf("Remote closed connection\n");
+      fprintf(stderr, "Remote closed connection\n");
       return -2;
     }
     else if (!bot->conInfo.enableSSL && n < 0) {
@@ -529,10 +520,10 @@ int bot_run(BotInfo *bot) {
   }  
   //add all messages to input queue
   if (n > 0) {
-    char *line = strtok_r(bot->recvbuf, "\r\n", &bot->line_off);
+    char *line = strtok_r(bot->recvbuf, MSG_FOOTER, &bot->line_off);
     while (line) {
       BotInputQueue_enqueueInput(&bot->inputQueue, line);
-      line = strtok_r(NULL, "\r\n", &bot->line_off);
+      line = strtok_r(NULL, MSG_FOOTER, &bot->line_off);
     }
   }
 

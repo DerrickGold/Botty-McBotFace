@@ -14,14 +14,14 @@
 BotInfo conInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "CHANGE THIS",
-    .channel  = "#CHANGE THIS"
+    .server   = "irc.freenode.net",
+    .channel  = "#derricks_bot_test"
   },
   .host     = "CIRCBotHost",
-  .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
+  .nick     = {"Mr_Meeseeks", "DrawBot", "CIrcBot3"},
   .ident    = "CIrcBot",
   .realname = "Botty McBotFace",
-  .master   = "Derrick",
+  .master   = "BassAceGold",
   .useSSL   = 1
 };
 /*=====================================================
@@ -50,19 +50,19 @@ typedef struct MailBox {
 
 char *getNotified(char *nick);
 int numMsgs(char *nick);
-void readMail(BotInfo *bot, char *nick);
+void readMail(BotInfo *bot, char *respTarget, char *nick);
 int saveMail(char *to, char *from, char *message);
 void destroyAllMailBoxes(void);
 
 
-static void mailNotify(BotInfo *bot, char *nick) {
+static void mailNotify(BotInfo *bot, char *channel, char *nick) {
   //mail notification
   int left = numMsgs(nick);
   if (left > 0) {
      char *notStatus = getNotified(nick);
      if (!notStatus) return;
      if (!*notStatus) {
-         botty_say(bot, NULL, "%s: You have %d unread message(s). Use '~mail' to view them.", nick, left);
+         botty_say(bot, channel, "%s: You have %d unread message(s). Use '~mail' to view them.", nick, left);
          *notStatus = 1;
      }
   }
@@ -114,7 +114,7 @@ static int onMsg(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
 
   printf("Recieved msg from %s in %s: %s\n", msg->nick, msg->channel, msg->msg);
-  mailNotify((BotInfo *)data, msg->nick);
+  mailNotify((BotInfo *)data, msg->channel,  msg->nick);
   links_store(&ListOfLinks, msg->msg);
   return 0;
 }
@@ -122,13 +122,13 @@ static int onMsg(void *data, IrcMsg *msg) {
 static int onUsrJoin(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   printf("'%s' has joined the channel\n", msg->nick);
-  mailNotify((BotInfo *)data, msg->nick);
+  mailNotify((BotInfo *)data, msg->channel, msg->nick);
   return 0;
 }
 
 static int onUsrPart(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
-  printf("%s has left the channel\n", msg->nick);
+  fprintf(stderr, "%s has left the channel\n", msg->nick);
 
   //reset mail notification
   char *notStatus = getNotified(msg->nick);
@@ -139,19 +139,19 @@ static int onUsrPart(void *data, IrcMsg *msg) {
 static int onNickChange(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   BotInfo *i = (BotInfo *)data;
-  botty_say(i, NULL, "I see what you did there %s... AKA %s!", msg->msg, msg->nick);
-  mailNotify((BotInfo *)data, msg->nick);
+  botty_say(i, msg->channel, "I see what you did there %s... AKA %s!", msg->msg, msg->nick);
+  mailNotify((BotInfo *)data, msg->channel, msg->nick);
   return 0;
 }
 
 static int onServerResp(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
 
-  printf("Received code: %s\n", msg->action);
+  fprintf(stderr, "Received code: %s\n", msg->action);
   for (int i = 0; i < MAX_PARAMETERS; i++) {
     if (!msg->msgTok[i]) break;
 
-    printf("Parameter %d: %s\n", i, msg->msgTok[i]);
+    fprintf(stderr, "Parameter %d: %s\n", i, msg->msgTok[i]);
   }
 
   return 0;
@@ -163,36 +163,38 @@ static int onServerResp(void *data, IrcMsg *msg) {
  *===================================================*/
 
 //message command for use with mailboxes
-int botcmd_msg(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-
+int botcmd_msg(void *cmdData, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)cmdData;
+  char *responseTarget = botcmd_builtin_getTarget(data);
   char *to = args[1], *msg = args[2];
+  
   if (!to || !msg) {
-    botty_say(data->bot, NULL,
+    botty_say(data->bot, responseTarget,
                "%s: Malformed mail command, must contain a destination nick and a message.",
                data->msg->nick);
     return 0;
   }
 
   if (saveMail(to, data->msg->nick, msg)) {
-    botty_say(data->bot, NULL,
+    botty_say(data->bot, responseTarget,
                "%s: There was an error saving your message, contact bot owner for assistance.",
                data->msg->nick);
     return 0;
   }
 
-  botty_say(data->bot, NULL,
+  botty_say(data->bot, responseTarget,
              "%s: Your message will be delivered to %s upon their return.",
              data->msg->nick, to);
   return 0;
 }
 
 //mail command to read any inboxed messages
-int botcmd_mail(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-  readMail(data->bot, data->msg->nick);
+int botcmd_mail(void *cmdData, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)cmdData;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+  readMail(data->bot, responseTarget, data->msg->nick);
   int left = numMsgs(data->msg->nick);
-  botty_say(data->bot, NULL, "%s: You have %d message(s) remaining.", data->msg->nick, left);
+  botty_say(data->bot, responseTarget, "%s: You have %d message(s) remaining.", data->msg->nick, left);
   return 0;
 }
 
@@ -202,7 +204,8 @@ int botcmd_mail(void *i, char *args[MAX_BOT_ARGS]) {
  */
 int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
   CmdData *data = (CmdData *)i;
-  botty_say(data->bot, NULL, args[1]);
+  char *responseTarget = botcmd_builtin_getTarget(data);
+  botty_say(data->bot, responseTarget, args[1]);
   return 0;
 }
 
@@ -220,6 +223,8 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
 
   static roulette game = {.shot = 0, .state = -1};
   CmdData *data = (CmdData *)i;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+  
   game.loop = 0;
   do {
     switch (game.state) {
@@ -229,21 +234,21 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
       game.loop++;
     }
     case 0:
-      botty_ctcpSend(data->bot, NULL, "ACTION", "loads a round and spins the cylinder.");
+      botty_ctcpSend(data->bot, responseTarget, "ACTION", "loads a round and spins the cylinder.");
       game.shot = (rand() % BULLETS + 1) + 1;
       game.doQuote = (game.shot >= BULLETS);
       game.state = 1;
       break;
     case 1:
       if (--game.shot == 0) {
-        botty_ctcpSend(data->bot, NULL, "ACTION", "BANG! %s is dead.", data->msg->nick);
+        botty_ctcpSend(data->bot, responseTarget, "ACTION", "BANG! %s is dead.", data->msg->nick);
         //reload the gun once it has been shot
         game.state = 0;
         game.loop++;
       } else
-        botty_ctcpSend(data->bot, NULL, "ACTION", "Click... %s is safe.", data->msg->nick);
+        botty_ctcpSend(data->bot, responseTarget, "ACTION", "Click... %s is safe.", data->msg->nick);
 
-      if (game.doQuote && game.shot == 2) botty_say(data->bot, NULL, QUOTE);
+      if (game.doQuote && game.shot == 2) botty_say(data->bot, responseTarget, QUOTE);
       break;
     }
   } while (game.loop--);
@@ -255,26 +260,27 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
   #define MAX_DICE 9
 
   CmdData *data = (CmdData *)i;
+  char *responseTarget = botcmd_builtin_getTarget(data);
   char msg[MAX_MSG_LEN];
   int numDice = 0, dieMax = 0, n = 0;
   char delim = '\0';
 
   if (!args[1]) {
-    botty_say(data->bot, NULL, "Missing dice information");
+    botty_say(data->bot, responseTarget, "Missing dice information");
     return 0;
   }
 
   n = sscanf(args[1], "%u%c%u", &numDice, &delim, &dieMax);
   if (n < 3) {
-    botty_say(data->bot, NULL, "Invalid roll request: missing parameter");
+    botty_say(data->bot, responseTarget, "Invalid roll request: missing parameter");
     return 0;
   }
   else if (numDice > MAX_DICE || numDice < 1) {
-    botty_say(data->bot, NULL, "Invalid roll request: only 1 through 9 dice may be rolled.");
+    botty_say(data->bot, responseTarget, "Invalid roll request: only 1 through 9 dice may be rolled.");
     return 0;
   }
   else if (dieMax < 2) {
-    botty_say(data->bot, NULL, "Invalid roll request: dice must have a max greater than 1");
+    botty_say(data->bot, responseTarget, "Invalid roll request: dice must have a max greater than 1");
     return 0;
   }
 
@@ -284,7 +290,7 @@ int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
     offset += snprintf(msg + offset, MAX_MSG_LEN, "%d ", num);
   }
   snprintf(msg + offset, MAX_MSG_LEN, "for %s", data->msg->nick);
-  botty_ctcpSend(data->bot, NULL, "ACTION", msg);
+  botty_ctcpSend(data->bot, responseTarget, "ACTION", msg);
   return 0;
 }
 
@@ -345,14 +351,14 @@ int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
   char path[512];
   char *file = args[1];
   if (!file) {
-    botty_say(data->bot, NULL, "%s: please specify a picture.", caller);
+    botty_say(data->bot, responseTarget, "%s: please specify a picture.", caller);
     return 0;
   }
 
   snprintf(path, sizeof(path), "art/%s.txt", file);
   FILE *f = fopen(path, "rb");
   if (!f) {
-    botty_say(data->bot, NULL, "File '%s' does not exist!", file);
+    botty_say(data->bot, responseTarget, "File '%s' does not exist!", file);
     return 0;
   }
 
@@ -556,7 +562,7 @@ int numMsgs(char *nick) {
   return box->count;
 }
 
-void readMail(BotInfo *bot, char *nick) {
+void readMail(BotInfo *bot, char *respTarget, char *nick) {
   int msgCount = numMsgs(nick);
   if (!msgCount) return;
 
@@ -571,7 +577,7 @@ void readMail(BotInfo *bot, char *nick) {
   struct tm * timeinfo = localtime (&message->sent);
   strftime(buff, sizeof(buff), "%b %d @ %H:%M", timeinfo);
 
-  botty_say(bot, NULL, "%s: [%s <%s>] %s", nick, buff, message->from, message->msg);
+  botty_say(bot, respTarget, "%s: [%s <%s>] %s", nick, buff, message->from, message->msg);
   free(message);
   box->count--;
 }
@@ -652,7 +658,7 @@ int links_print(void *i, char *args[MAX_BOT_ARGS]) {
   char *script = "links";
 
   if (ListOfLinks.count == 0) {
-    botty_say(data->bot, NULL, "%s: There is no link history to post.", caller);
+    botty_say(data->bot, responseTarget, "%s: There is no link history to post.", caller);
     return 0;
   }
 
@@ -663,7 +669,7 @@ int links_print(void *i, char *args[MAX_BOT_ARGS]) {
   }
 
   ListOfLinks.lastPos = ListOfLinks.head;
-  botty_say(data->bot, NULL, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
+  botty_say(data->bot, responseTarget, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
   botty_runProcess(data->bot, &links_print_process, sArgs, script, caller);
   return 0;
 }

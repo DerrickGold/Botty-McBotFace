@@ -57,6 +57,11 @@
 #define NAME_REPLY "353"
 #define REG_ERR_CODE "433"
 #define NOTICE_ACTION "NOTICE"
+#define PING_STR "PING"
+#define PONG_STR "PONG"
+#define NICK_CMD_STR "NICK"
+#define USER_CMD_STR "USER"
+#define JOIN_CMD_STR "JOIN"
 
 #define ACTION_HASH_SIZE 43
 #define COMMAND_HASH_SIZE 13

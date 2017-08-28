@@ -336,23 +336,11 @@ int bot_parse(BotInfo *bot, char *line) {
   case CONSTATE_REGISTERED:
     for (int i = 0; i < MAX_CONNECTED_CHANS; i++) {
       char *chan = bot->info->channel[i];
-      if (*chan == '\0') continue;
-      fprintf(stderr, "CONNECTING TO: %s...\n", chan);
-      snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", chan);
-      bot_irc_send(bot, sysBuf);
+      if (*chan == '\0')
+        break;
+      bot_join(bot, chan);
     }
-    bot->state = CONSTATE_JOINED;
-    break;
-  case CONSTATE_JOINED:
     bot->joined = 1;
-    for (int i = 0; i < MAX_CONNECTED_CHANS; i++) {
-      char *chan = bot->info->channel[i];
-      if (*chan == '\0') continue;
-      IrcMsg *msg = ircMsg_newMsg();
-      ircMsg_setChannel(msg, chan);
-      callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, msg);
-      free(msg);
-    }
     bot->state = CONSTATE_LISTENING;
     break;
   default:
@@ -557,6 +545,24 @@ int bot_run(BotInfo *bot) {
   BotProcess_updateProcessQueue(&bot->procQueue, (void *)bot);
   processMsgQueueHash(bot);
   return 0;
+}
+
+void bot_join(BotInfo *bot, char *channel) {
+  if (!channel) {
+    fprintf(stderr, "bot_join: Cannot join NULL channel\n");
+    return;
+  }
+
+  fprintf(stderr, "bot_join: %s...\n", channel);
+  
+  char sysBuf[MAX_MSG_LEN];
+  snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", channel);
+  bot_irc_send(bot, sysBuf);
+  
+  IrcMsg *msg = ircMsg_newMsg();
+  ircMsg_setChannel(msg, channel);
+  callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, msg);
+  free(msg);
 }
 
 /*

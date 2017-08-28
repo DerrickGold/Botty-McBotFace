@@ -13,7 +13,6 @@ typedef enum {
   CONSTATE_NONE,
   CONSTATE_CONNECTED,
   CONSTATE_REGISTERED,
-  CONSTATE_JOINED,
   CONSTATE_LISTENING,
 } ConState;
 
@@ -101,5 +100,7 @@ int bot_isThrottled(BotInfo *bot);
 void bot_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
 
 int bot_registerAlias(BotInfo *bot, char *alias, char *cmd);
+
+void bot_join(BotInfo *bot, char *channel);
 
 #endif //__IRC_H__

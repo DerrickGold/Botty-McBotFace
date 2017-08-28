@@ -390,6 +390,18 @@ static int botcmd_builtin_rmAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
 }
 
 
+static int botcmd_builtin_join(void *cmdData, char *args[MAX_BOT_ARGS]) {
+  CmdData *data = (CmdData *)cmdData;
+  BotInfo *bot = (BotInfo *)data->bot;
+  char *channel = args[1];
+  //  char *caller = data->msg->nick;
+  //  char *responseTarget = botcmd_builtin_getTarget(data);
+
+  bot_join(bot, channel);
+  return 0;
+}
+
+
 /*
  * Initialize the built in commands provided in this file.
  */
@@ -404,5 +416,6 @@ int botcmd_builtin(BotInfo *bot) {
   bot_addcommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
   bot_addcommand(bot, "lsalias", 0, 1, &botcmd_builtin_listAliases);
   bot_addcommand(bot, "rmalias", 0, 2, &botcmd_builtin_rmAlias);
+  bot_addcommand(bot, "join", 0, 2, &botcmd_builtin_join);
   return 0;
 }

@@ -54,8 +54,7 @@ static int printCmd(HashEntry *entry, void *output) {
   return 0;
 }
 
-static int botcmd_builtin_help(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+static int botcmd_builtin_help(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char output[MAX_MSG_LEN] = "Available commands: ";
   char *end = NULL;
   char *target = botcmd_builtin_getTarget(data);
@@ -67,23 +66,19 @@ static int botcmd_builtin_help(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
-static int botcmd_builtin_info(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+static int botcmd_builtin_info(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *target = botcmd_builtin_getTarget(data);
   botty_say(data->bot, target, INFO_MSG);
   return 0;
 }
 
-static int botcmd_builtin_source(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+static int botcmd_builtin_source(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *target = botcmd_builtin_getTarget(data);
   botty_say(data->bot, target, SRC_MSG);
   return 0;
 }
 
-static int botcmd_builtin_die(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-  //botty_say(data->bot, NULL, "Seeya!");
+static int botcmd_builtin_die(CmdData *data, char *args[MAX_BOT_ARGS]) {
   bot_irc_send(data->bot, "QUIT :leaving");
   return -1;
 }
@@ -134,9 +129,7 @@ static int _script(void *b, BotProcessArgs *sArgs) {
   return -1;
 }
 
-int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-
+int botcmd_builtin_script(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *script = args[1];
   char *scriptArgs = args[2];
   char *caller = data->msg->nick;
@@ -189,7 +182,6 @@ int botcmd_builtin_script(void *i, char *args[MAX_BOT_ARGS]) {
   }
 
   bot_runProcess(data->bot, &_script, sArgs, script, caller);
-  //botty_say(data->bot, responseTarget, "%s: started '%s' with pid: %d.", caller, script, pid);
   return 0;
 }
 
@@ -217,9 +209,7 @@ static int _listProcesses(void *b, BotProcessArgs *pArgs) {
   return -1;
 }
 
-int botcmd_builtin_listProcesses(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-
+int botcmd_builtin_listProcesses(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *script = "[BuiltIn] List Process";
   char *caller = data->msg->nick;
   char *responseTarget = botcmd_builtin_getTarget(data);
@@ -245,9 +235,7 @@ static int _clearQueueHelper(HashEntry *entry, void *clearQueueContainer) {
   return BotMsgQueue_rmPidMsg(container->msgQueues, entry->key, container->pid);
 }
 
-int botcmd_builtin_killProcess(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
-
+int botcmd_builtin_killProcess(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *caller = data->msg->nick;
   char *responseTarget = botcmd_builtin_getTarget(data);
 
@@ -301,9 +289,7 @@ static void _printAlias(CmdData *data, CmdAlias *aliasEntry, char *alias) {
   botty_say(data->bot, responseTarget, "%s: '%s' ->'%s'", caller, alias, argList);
 }
 
-int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)cmdData;
-
+int botcmd_builtin_registerAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *caller = data->msg->nick;
   char *responseTarget = botcmd_builtin_getTarget(data);
   char *alias = args[1];
@@ -314,7 +300,6 @@ int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
   else if (!replaceWith) {
-    //botty_say(data->bot, responseTarget, "%s: Missing text to alias to: %s", caller, alias);
     CmdAlias *aliasEntry = command_alias_get(data->bot->cmdAliases, alias);
     _printAlias(data, aliasEntry, alias);
     return 0;
@@ -326,7 +311,6 @@ int botcmd_builtin_registerAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
       break;
 
     case ALIAS_ERR_NONE: {
-      //botty_say(data->bot, responseTarget, "%s: Aliased '%s' -> '%s'", caller, args[1], args[2]);
       CmdAlias *aliasEntry = command_alias_get(data->bot->cmdAliases, alias);
       _printAlias(data, aliasEntry, alias);
       return 0;
@@ -356,14 +340,13 @@ static int _listAliasHelper(HashEntry *entry, void *cmdData) {
   return 0;
 }
 
-static int botcmd_builtin_listAliases(void *cmdData, char *args[MAX_BOT_ARGS]) {
-  BotInfo *bot = (BotInfo *)((CmdData *)cmdData)->bot;
-  HashTable_forEach(bot->cmdAliases, cmdData, &_listAliasHelper);
+static int botcmd_builtin_listAliases(CmdData *data, char *args[MAX_BOT_ARGS]) {
+  BotInfo *bot = (BotInfo *)data->bot;
+  HashTable_forEach(bot->cmdAliases, data, &_listAliasHelper);
   return 0;
 }
 
-static int botcmd_builtin_rmAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)cmdData;
+static int botcmd_builtin_rmAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
   BotInfo *bot = (BotInfo *)data->bot;
   char *alias = args[1];
   char *caller = data->msg->nick;
@@ -390,13 +373,9 @@ static int botcmd_builtin_rmAlias(void *cmdData, char *args[MAX_BOT_ARGS]) {
 }
 
 
-static int botcmd_builtin_join(void *cmdData, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)cmdData;
+static int botcmd_builtin_join(CmdData *data, char *args[MAX_BOT_ARGS]) {
   BotInfo *bot = (BotInfo *)data->bot;
   char *channel = args[1];
-  //  char *caller = data->msg->nick;
-  //  char *responseTarget = botcmd_builtin_getTarget(data);
-
   bot_join(bot, channel);
   return 0;
 }
@@ -406,16 +385,16 @@ static int botcmd_builtin_join(void *cmdData, char *args[MAX_BOT_ARGS]) {
  * Initialize the built in commands provided in this file.
  */
 int botcmd_builtin(BotInfo *bot) {
-  bot_addcommand(bot, "help", 0, 1, &botcmd_builtin_help);
-  bot_addcommand(bot, "info", 0, 1, &botcmd_builtin_info);
-  bot_addcommand(bot, "source", 0, 1, &botcmd_builtin_source);
-  bot_addcommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_builtin_die);
-  bot_addcommand(bot, "script", 0, 3, &botcmd_builtin_script);
-  bot_addcommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
-  bot_addcommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
-  bot_addcommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
-  bot_addcommand(bot, "lsalias", 0, 1, &botcmd_builtin_listAliases);
-  bot_addcommand(bot, "rmalias", 0, 2, &botcmd_builtin_rmAlias);
-  bot_addcommand(bot, "join", 0, 2, &botcmd_builtin_join);
+  botty_addCommand(bot, "help", 0, 1, &botcmd_builtin_help);
+  botty_addCommand(bot, "info", 0, 1, &botcmd_builtin_info);
+  botty_addCommand(bot, "source", 0, 1, &botcmd_builtin_source);
+  botty_addCommand(bot, "die", CMDFLAG_MASTER, 1, &botcmd_builtin_die);
+  botty_addCommand(bot, "script", 0, 3, &botcmd_builtin_script);
+  botty_addCommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
+  botty_addCommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
+  botty_addCommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
+  botty_addCommand(bot, "lsalias", 0, 1, &botcmd_builtin_listAliases);
+  botty_addCommand(bot, "rmalias", 0, 2, &botcmd_builtin_rmAlias);
+  botty_addCommand(bot, "join", 0, 2, &botcmd_builtin_join);
   return 0;
 }

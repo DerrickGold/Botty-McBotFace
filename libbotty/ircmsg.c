@@ -25,24 +25,37 @@ void ircMsg_setChannel(IrcMsg *msg, char *channel) {
 }
 
 
-IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, BotCmd **cmd) {
+static char *get_nick(IrcMsg *msg, char *input, char **tok_off) {
+  char *tok = strtok_r(input, "!", tok_off);
+  if (!tok) return NULL;
+  strncpy(msg->nick, tok+1, MAX_NICK_LEN);
+  return tok;
+}
+
+static char *get_hostname(IrcMsg *msg, char *input, char **tok_off) {
+  //skip host name
+  char *tok = strtok_r(NULL, " ", tok_off);
+  //if (!tok) return msg;
+  return tok;
+}
+
+static char *get_action(IrcMsg *msg, char *input, char **tok_off) {
+  char *tok = strtok_r(NULL, " ", tok_off);
+  if (!tok) return NULL;
+  strncpy(msg->action, tok, MAX_CMD_LEN);
+  return tok;
+}
+
+
+IrcMsg *ircMsg_irc_new(char *input) {
   IrcMsg *msg = ircMsg_newMsg();
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
   int i = 0;
 
-  //first get the nick that created the message
-  tok = strtok_r(input, "!", &tok_off);
-  if (!tok) return msg;
-  strncpy(msg->nick, tok+1, MAX_NICK_LEN);
-  //skip host name
-  tok = strtok_r(NULL, " ", &tok_off);
-  if (!tok) return msg;
-
-  //get action issued
-  tok = strtok_r(NULL, " ", &tok_off);
-  if (!tok) return msg;
-  strncpy(msg->action, tok, MAX_CMD_LEN);
+  if (!(tok = get_nick(msg, input, &tok_off))) return msg;
+  if (!(tok = get_hostname(msg, input, &tok_off))) return msg;
+  if (!(tok = get_action(msg, input, &tok_off))) return msg;
 
   //get the channel or user the message originated from
   tok = strtok_r(NULL, " ", &tok_off);
@@ -57,39 +70,6 @@ IrcMsg *ircMsg_irc_new(char *input, HashTable *cmdTable, HashTable *cmdAliases, 
 
   //finally save the rest of the message
   strncpy(msg->msg, tok_off+1, MAX_MSG_LEN);
-
-  //parse a given command
-  if (msg->msg[0] == CMD_CHAR && cmd) {
-    int argCount = MAX_BOT_ARGS;
-    tok = msg->msg + 1;
-    while(i < argCount) {
-      tok_off = strchr(tok, BOT_ARG_DELIM);
-      if (tok_off && i < argCount - 1) *tok_off = '\0';
-      msg->msgTok[i] = tok;
-
-      if (i == 0) {
-        *cmd = command_get(cmdTable, msg->msgTok[0]);
-        if (*cmd)  argCount = (*cmd)->args;
-        else {
-          CmdAlias *alias = command_alias_get(cmdAliases, msg->msgTok[0]);
-          if (alias) {
-            *cmd = alias->cmd;
-            argCount = alias->cmd->args;
-            for (i = 0; i < alias->argc; i++)
-              msg->msgTok[i] = alias->args[i];
-
-            i--;
-          }
-        }
-      }
-
-      if (!tok_off) break;
-      tok_off++;
-      tok = tok_off;
-      i++;
-    }
-  }
-
   return msg;
 }
 

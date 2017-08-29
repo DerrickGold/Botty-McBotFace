@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include "botapi.h"
-
+#include "commands.h"
 static int ircRefCount = 0;
 
 //initialize the bot using data set in *bot
@@ -11,6 +11,10 @@ int botty_init(BotInfo *bot, int argc, char *argv[], int argstart) {
   return bot_init(bot, argc, argv, argstart);
 }
 
+
+void botty_addCommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) {
+  command_reg(bot->commands, cmd, flags, args, fn);
+}
 
 void botty_cleanup(BotInfo *bot) {
   bot_cleanup(bot);

@@ -9,6 +9,7 @@
 #include "cmddata.h"
 #include "builtin.h"
 #include "botprocqueue.h"
+#include "commands.h"
 
 int botty_init(BotInfo *bot, int argc, char *argv[], int argstart);
 
@@ -16,11 +17,7 @@ void botty_cleanup(BotInfo *bot);
 
 void botty_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller);
 
-
-
-//returns void
-#define botty_addCommand(bot, cmd, flags, args, fn) \
-  bot_addcommand(bot, cmd, flags, args, fn)
+void botty_addCommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn);
 
 //returns void
 #define botty_setCallback(bot, id, fn)          \

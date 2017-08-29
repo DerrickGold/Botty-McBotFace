@@ -9,13 +9,13 @@ LDLIBS=-lm
 all: botty.a
 
 #the botty library
-botty.a: commands.o callback.o ircmsg.o hash.o irc.o builtin.o botapi.o connection.o botmsgqueues.o \
+botty.a: ircmsg.o commands.o callback.o hash.o irc.o builtin.o botapi.o connection.o botmsgqueues.o \
 	botprocqueue.o botinputqueue.o
 	ar rcs $@ $^
 
-commands.o: commands.c commands.h globals.h hash.h
+commands.o: commands.c commands.h globals.h hash.h ircmsg.h cmddata.h
 callback.o: callback.c callback.h ircmsg.h globals.h ircmsg.h
-ircmsg.o: ircmsg.c ircmsg.h globals.h commands.h hash.h
+ircmsg.o: ircmsg.c ircmsg.h globals.h hash.h
 connection.o: connection.c connection.h
 irc.o: irc.c irc.h ircmsg.h commands.h callback.h connection.h hash.h globals.h cmddata.h builtin.h \
 	botmsgqueues.h botprocqueue.h botinputqueue.h

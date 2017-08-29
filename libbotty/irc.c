@@ -354,20 +354,20 @@ int bot_parse(BotInfo *bot, char *line) {
       break;
     }
     else {
-      BotCmd *cmd = NULL;
-      IrcMsg *msg = ircMsg_irc_new(line, bot->commands, bot->cmdAliases, &cmd);
+      IrcMsg *msg = ircMsg_irc_new(line);
+      BotCmd *cmd = command_parse_ircmsg(msg, bot->commands, bot->cmdAliases);
       IRC_API_Actions action = IRC_ACTION_NOP;
-      HashEntry *a = HashTable_find(IrcApiActions, msg->action);
+      HashEntry *a = NULL;
 
       if (cmd) {
         CmdData data = { .bot = bot, .msg = msg };
         //make sure who ever is calling the command has permission to do so
         if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, bot->master))
           fprintf(stderr, "%s is not %s\n", msg->nick, bot->master);
-        else if ((servStat = command_call_r(cmd, (void *)&data, msg->msgTok)) < 0)
+        else if ((servStat = command_call_r(cmd, &data, msg->msgTok)) < 0)
           fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
       }
-      else if (a) {
+      else if ((a = HashTable_find(IrcApiActions, msg->action))) {
         if (a->data) action = *(IRC_API_Actions*)a->data;
 
         switch(action) {
@@ -488,10 +488,6 @@ void bot_cleanup(BotInfo *bot) {
 
 void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn) {
   callback_set_r(bot->cb, id, fn);
-}
-
-void bot_addcommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn) {
-  command_reg(bot->commands, cmd, flags, args, fn);
 }
 
 

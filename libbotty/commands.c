@@ -4,6 +4,7 @@
 
 #include "globals.h"
 #include "commands.h"
+#include "ircmsg.h"
 
 /*
  * Register a command for the bot to use
@@ -13,7 +14,7 @@ int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandF
     fprintf(stderr, "Command registration failed:null table, tag, or function given\n");
     return -1;
   }
-
+  
   BotCmd *newcmd = calloc(1, sizeof(BotCmd));
   if (!newcmd) {
     perror("Command Alloc Error: ");
@@ -42,7 +43,7 @@ BotCmd *command_get(HashTable *cmdTable, char *command) {
   return NULL;
 }
 
-int command_call_r(BotCmd *cmd, void *data, char *args[MAX_BOT_ARGS]) {
+int command_call_r(BotCmd *cmd, CmdData *data, char *args[MAX_BOT_ARGS]) {
 if (!cmd) {
     fprintf(stderr, "Command (%s) is not a registered command\n", cmd->cmd);
     return -1;
@@ -50,7 +51,7 @@ if (!cmd) {
   return cmd->fn(data, args);
 }
 
-int command_call(HashTable *cmdTable, char *command, void *data, char *args[MAX_BOT_ARGS]) {
+int command_call(HashTable *cmdTable, char *command, CmdData *data, char *args[MAX_BOT_ARGS]) {
   BotCmd *cmd = command_get(cmdTable, command);
   return command_call_r(cmd, data, args);
 }
@@ -176,3 +177,43 @@ CmdAlias *command_alias_get(HashTable *cmdAliases, char *alias) {
   if (e) return (CmdAlias *)e->data;
   return NULL;
 }
+
+BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAliases) {
+  if (msg->msg[0] != CMD_CHAR) return NULL;
+
+  BotCmd *cmd = NULL;
+  CmdAlias *alias = NULL;
+  int argCount = MAX_BOT_ARGS;
+  char *tok = msg->msg + 1;
+  char *tok_off = NULL;
+  int i = 0;
+  
+  while(i < argCount) {
+    tok_off = strchr(tok, BOT_ARG_DELIM);
+    if (tok_off && i < argCount - 1) *tok_off = '\0';
+    msg->msgTok[i] = tok;
+    
+    if (i == 0) {
+      cmd = command_get(cmdTable, msg->msgTok[0]);
+      if (cmd)  argCount = cmd->args;
+      else {
+        if ((alias= command_alias_get(cmdAliases, msg->msgTok[0]))) {
+          cmd = alias->cmd;
+          argCount = alias->cmd->args;
+          for (i = 0; i < alias->argc; i++)
+            msg->msgTok[i] = alias->args[i];
+          
+          i--;
+        }
+      }
+    }  
+    if (!tok_off) break;
+    tok_off++;
+    tok = tok_off;
+    i++;
+  }
+
+  return cmd;
+}
+
+

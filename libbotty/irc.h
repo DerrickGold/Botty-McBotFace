@@ -3,7 +3,6 @@
 
 #include <stdarg.h>
 #include "globals.h"
-#include "commands.h"
 #include "callback.h"
 #include "connection.h"
 #include "botprocqueue.h"
@@ -78,8 +77,6 @@ char *bot_getNick(BotInfo *bot);
 void bot_cleanup(BotInfo *info);
 
 void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn);
-
-void bot_addcommand(BotInfo *info, char *cmd, int flags, int args, CommandFn fn);
 
 int bot_run(BotInfo *info);
 

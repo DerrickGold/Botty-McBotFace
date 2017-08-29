@@ -98,15 +98,14 @@ int onServerResp(void *data, IrcMsg *msg) {
  * Some fun commands that aren't necessary, but illustrate 
  * how to use this bot api.
  */
-int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+int botcmd_say(CmdData *data, char *args[MAX_BOT_ARGS]) {
   botty_say(data->bot, NULL, args[1]);
   return 0;
 }
 
 
 /* Hacky roulette game implementation */
-int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
+int botcmd_roulette(CmdData *data, char *args[MAX_BOT_ARGS]) {
   #define BULLETS 6
   #define QUOTE "You've got to ask yourself one question: \"do I feel lucky?\" Well do you punk?"
   //preserve game state across function calls
@@ -118,7 +117,6 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
   } roulette;
 
   static roulette game = {.shot = 0, .state = -1};
-  CmdData *data = (CmdData *)i;
   game.loop = 0;
   do {
     switch (game.state) {
@@ -150,10 +148,9 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
-int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
+int botcmd_roll(CmdData *data, char *args[MAX_BOT_ARGS]) {
   #define MAX_DICE 9
   
-  CmdData *data = (CmdData *)i;
   char msg[MAX_MSG_LEN];
   int numDice = 0, dieMax = 0, n = 0;
   char delim = '\0';
@@ -192,8 +189,7 @@ static void printNick(NickList *n, void *data) {
   fprintf(stdout, "NICKDUMP: %s\n", n->nick);
 }
 
-int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+int botcmd_dumpnames(CmdData *data, char *args[MAX_BOT_ARGS]) {
   bot_foreachName(data->bot, NULL, &printNick);
   return 0;
 }

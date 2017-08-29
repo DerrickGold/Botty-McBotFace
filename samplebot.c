@@ -90,7 +90,7 @@ LinksHead ListOfLinks = {};
 
 char *links_msgContainsLink(char *input);
 char links_store(LinksHead *head, char *input);
-int links_print(void *i, char *args[MAX_BOT_ARGS]);
+int links_print(CmdData *data, char *args[MAX_BOT_ARGS]);
 void links_purge(LinksHead *list);
 
 /*=====================================================
@@ -163,8 +163,7 @@ static int onServerResp(void *data, IrcMsg *msg) {
  *===================================================*/
 
 //message command for use with mailboxes
-int botcmd_msg(void *cmdData, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)cmdData;
+int botcmd_msg(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
   char *to = args[1], *msg = args[2];
   
@@ -189,8 +188,7 @@ int botcmd_msg(void *cmdData, char *args[MAX_BOT_ARGS]) {
 }
 
 //mail command to read any inboxed messages
-int botcmd_mail(void *cmdData, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)cmdData;
+int botcmd_mail(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
   readMail(data->bot, responseTarget, data->msg->nick);
   int left = numMsgs(data->msg->nick);
@@ -202,15 +200,14 @@ int botcmd_mail(void *cmdData, char *args[MAX_BOT_ARGS]) {
  * Some fun commands that aren't necessary, but illustrate
  * how to use this bot api.
  */
-int botcmd_say(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+int botcmd_say(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
   botty_say(data->bot, responseTarget, args[1]);
   return 0;
 }
 
 /* Hacky roulette game implementation */
-int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
+int botcmd_roulette(CmdData *data, char *args[MAX_BOT_ARGS]) {
   #define BULLETS 6
   #define QUOTE "You've got to ask yourself one question: \"do I feel lucky?\" Well do you punk?"
   //preserve game state across function calls
@@ -222,7 +219,6 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
   } roulette;
 
   static roulette game = {.shot = 0, .state = -1};
-  CmdData *data = (CmdData *)i;
   char *responseTarget = botcmd_builtin_getTarget(data);
   
   game.loop = 0;
@@ -256,10 +252,9 @@ int botcmd_roulette(void *i, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
-int botcmd_roll(void *i, char *args[MAX_BOT_ARGS]) {
+int botcmd_roll(CmdData *data, char *args[MAX_BOT_ARGS]) {
   #define MAX_DICE 9
 
-  CmdData *data = (CmdData *)i;
   char *responseTarget = botcmd_builtin_getTarget(data);
   char msg[MAX_MSG_LEN];
   int numDice = 0, dieMax = 0, n = 0;
@@ -299,8 +294,7 @@ static void printNick(NickList *n, void *data) {
   fprintf(stdout, "NICKDUMP: %s\n", n->nick);
 }
 
-int botcmd_dumpnames(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+int botcmd_dumpnames(CmdData *data, char *args[MAX_BOT_ARGS]) {
   bot_foreachName(data->bot, NULL, &printNick);
   return 0;
 }
@@ -342,8 +336,7 @@ static int _draw(void *b, BotProcessArgs *args) {
   return -1;
 }
 
-int botcmd_draw(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+int botcmd_draw(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *caller = data->msg->nick;
   char *responseTarget = botty_respondDest(data);
   char *script = "draw";
@@ -413,7 +406,7 @@ int main(int argc, char *argv[]) {
   //process input 30 times per second
   struct timespec sleepTimer = {
     .tv_sec = 0,
-    .tv_nsec = ONE_SEC_IN_NS/30
+    .tv_nsec = ONE_SEC_IN_NS/120
   };
   while (((status = botty_process(&conInfo)) >= 0)) {
     //prevent 100% cpu usage
@@ -651,8 +644,7 @@ int links_print_process(void *b, BotProcessArgs *args) {
   return -1;
 }
 
-int links_print(void *i, char *args[MAX_BOT_ARGS]) {
-  CmdData *data = (CmdData *)i;
+int links_print(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *caller = data->msg->nick;
   char *responseTarget = botty_respondDest(data);
   char *script = "links";

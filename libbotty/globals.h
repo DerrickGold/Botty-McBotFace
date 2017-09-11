@@ -20,6 +20,7 @@
 #define PARAM_DELIM ':'
 #define PARAM_DELIM_STR ":"
 #define BOT_ARG_DELIM ' '
+#define SERVER_INFO_DELIM " "
 #define ARG_DELIM_LEN 1
 #define MSG_FOOTER "\r\n"
 #define CTCP_MARKER "\x01"
@@ -68,6 +69,7 @@
 #define COMMAND_HASH_SIZE 13
 #define QUEUE_HASH_SIZE 13
 #define ALIAS_HASH_SIZE 13
+#define CHANNICKS_HASH_SIZE 13
 
 typedef enum {
   IRC_ACTION_NOP = 0, IRC_ACTION_DIE, IRC_ACTION_WHO, IRC_ACTION_KICK, IRC_ACTION_NICK,

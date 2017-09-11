@@ -145,7 +145,7 @@ static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *
     fprintf(stderr, "_botSend: No response target provided!\n");
     return 0;
   }
-    
+
 
   //only buffer up to 4 message splits worth of text
   size_t msgBufLen = MAX_MSG_LEN * MAX_MSG_SPLITS;
@@ -225,12 +225,14 @@ static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   }
   //store all current users in the channel
   else if (!strncmp(msg->action, NAME_REPLY, strlen(NAME_REPLY))) {
-    char *start = msg->msgTok[1], *next = start, *end = start + strlen(start);
+  	fprintf(stderr, "REGNICK: %s\n", msg->msgTok[0]);
+    char *start = msg->msgTok[0], *next = start, *end = start + strlen(start);
     while (start < end) {
       while (*next != BOT_ARG_DELIM && next <= end) next++;
       *next = '\0';
-      bot_regName(bot, start);
-      fprintf(stdout, "Registered nick: %s\n", start);
+      fprintf(stdout, "Getting nick: %s from %s\n", start, msg->channel);
+      bot_regName(bot, msg->channel, start);
+      fprintf(stdout, "Registered nick: %s from %s\n", start, msg->channel);
       if (next < end) {
         *next = BOT_ARG_DELIM;
         next++;
@@ -271,18 +273,18 @@ static int parseServer(BotInfo *bot, char *line) {
 }
 
 static int userJoined(BotInfo *bot, IrcMsg *msg) {
-  bot_regName(bot, msg->nick);
+  bot_regName(bot, msg->channel, msg->nick);
   return callback_call_r(bot->cb, CALLBACK_USRJOIN, (void *)bot, msg);
 }
 
 static int userLeft(BotInfo *bot, IrcMsg *msg) {
-  bot_rmName(bot, msg->nick);
+  bot_rmName(bot, msg->channel, msg->nick);
   return callback_call_r(bot->cb, CALLBACK_USRPART, (void *)bot, msg);
 }
 
 static int userNickChange(BotInfo *bot, IrcMsg *msg) {
-  bot_rmName(bot, msg->nick);
-  bot_regName(bot, msg->msg);
+  bot_rmName(bot, msg->channel, msg->nick);
+  bot_regName(bot, msg->channel, msg->msg);
   return callback_call_r(bot->cb, CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 
@@ -443,6 +445,12 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
     return -1;
   }
 
+  bot->chanNickLists = HashTable_init(CHANNICKS_HASH_SIZE);
+  if (!bot->chanNickLists) {
+  	fprintf(stderr, "Error initializing hash table for channel nick lists\n");
+  	return -1;
+  }
+
   BotInputQueue_initQueue(&bot->inputQueue);
   return 0;
 }
@@ -481,7 +489,7 @@ void bot_cleanup(BotInfo *bot) {
   bot->msgQueues = NULL;
 
   BotInputQueue_clearQueue(&bot->inputQueue);
-  
+
   close(bot->conInfo.servfds.fd);
   freeaddrinfo(bot->conInfo.res);
 }
@@ -518,7 +526,7 @@ int bot_run(BotInfo *bot) {
       perror("Response error: ");
       return -3;
     }
-  }  
+  }
   //add all messages to input queue
   if (n > 0) {
     char *line = strtok_r(bot->recvbuf, MSG_FOOTER, &bot->line_off);
@@ -550,11 +558,11 @@ void bot_join(BotInfo *bot, char *channel) {
   }
 
   fprintf(stderr, "bot_join: %s...\n", channel);
-  
+
   char sysBuf[MAX_MSG_LEN];
   snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", channel);
   bot_irc_send(bot, sysBuf);
-  
+
   IrcMsg *msg = ircMsg_newMsg();
   ircMsg_setChannel(msg, channel);
   callback_call_r(bot->cb, CALLBACK_JOIN, (void*)bot, msg);
@@ -564,7 +572,7 @@ void bot_join(BotInfo *bot, char *channel) {
 /*
  * Keep a list of all nicks in the channel
  */
-void bot_regName(BotInfo *bot, char *nick) {
+void bot_regName(BotInfo *bot, char *channel, char *nick) {
   NickList *curNick;
   NickList *newNick = calloc(1, sizeof(NickList));
   if (!newNick) {
@@ -576,21 +584,34 @@ void bot_regName(BotInfo *bot, char *nick) {
   nick += (diff == 0);
   fprintf(stderr, "Registering Nick: %s\n", nick);
   strncpy(newNick->nick, nick, MAX_NICK_LEN);
-  if (!bot->names) {
+
+	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
+	if (!channelList) {
+		channelList = HashEntry_create(channel, NULL);
+		HashTable_add(bot->chanNickLists, channelList);
+	}
+
+	curNick = (NickList *)channelList->data;
+  if (!curNick) {
     //first name
-    bot->names = newNick;
+    channelList->data = (void *)newNick;
     return;
   }
 
-  curNick = bot->names;
   while (curNick->next) curNick = curNick->next;
   curNick->next = newNick;
 }
 
-void bot_rmName(BotInfo *bot, char *nick) {
+void bot_rmName(BotInfo *bot, char *channel, char *nick) {
   NickList *curNick, *lastNick;
 
-  curNick = bot->names;
+	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
+	if (!channelList) {
+		fprintf(stderr, "Error: Attempted to remove nick from channel nick list that doesn't exist\n");
+		return;
+	}
+
+  curNick = (NickList *)channelList->data;
   lastNick = curNick;
   while (curNick && strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
     fprintf(stderr, "Matching: %s with %s\n", curNick->nick, nick);
@@ -600,7 +621,7 @@ void bot_rmName(BotInfo *bot, char *nick) {
 
   //make sure the node we stopped on is the right one
   if (curNick && !strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
-    if (bot->names == curNick) bot->names = curNick->next;
+    if ((NickList *)channelList->data == curNick) channelList->data = (void *)curNick->next;
     else lastNick->next = curNick->next;
     free(curNick);
   } else
@@ -609,18 +630,24 @@ void bot_rmName(BotInfo *bot, char *nick) {
 }
 
 void bot_purgeNames(BotInfo *bot) {
-  NickList *curNick = bot->names, *next;
+  /*NickList *curNick = bot->names, *next;
   while (curNick) {
     next = curNick->next;
     free(curNick);
     curNick = next;
   }
-  bot->names = NULL;
+  bot->names = NULL;*/
 }
 
 
-void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data)) {
-  NickList *curNick = bot->names;
+void bot_foreachName(BotInfo *bot, char *channel, void *d, void (*fn) (NickList *nick, void *data)) {
+	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
+	if (!channelList) {
+		fprintf(stderr, "Error iterating through nicks in channel %s, no nicks registered here.\n", channel);
+		return;
+	}
+
+  NickList *curNick = channelList->data;
   while (curNick) {
     if (fn) fn(curNick, d);
     curNick = curNick->next;

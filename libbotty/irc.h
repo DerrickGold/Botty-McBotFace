@@ -46,7 +46,7 @@ typedef struct BotInfo {
 
   Callback cb[CALLBACK_COUNT];
   HashTable *commands;
-  NickList *names;
+  //NickList *names;
 
   BotProcessQueue procQueue;
 
@@ -55,6 +55,7 @@ typedef struct BotInfo {
 
   HashTable *msgQueues;
   HashTable *cmdAliases;
+  HashTable *chanNickLists;
 
   BotInputQueue inputQueue;
   //some pointer the user can use
@@ -84,13 +85,13 @@ int bot_send(BotInfo *info, char *target, char *action, char *ctcp, char *msg, .
 
 int bot_ctcp_send(BotInfo *info, char *target, char *command, char *msg, ...);
 
-void bot_regName(BotInfo *bot, char *nick);
+void bot_regName(BotInfo *bot, char *channel, char *nick);
 
-void bot_rmName(BotInfo *bot, char *nick);
+void bot_rmName(BotInfo *bot, char *channel, char *nick);
 
 void bot_purgeNames(BotInfo *bot);
 
-void bot_foreachName(BotInfo *bot, void *d, void (*fn) (NickList *nick, void *data));
+void bot_foreachName(BotInfo *bot, char *channel, void *d, void (*fn) (NickList *nick, void *data));
 
 int bot_isThrottled(BotInfo *bot);
 

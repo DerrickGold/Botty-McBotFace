@@ -10,7 +10,7 @@ IrcMsg *ircMsg_newMsg(void) {
   msg = calloc(1, sizeof(IrcMsg));
   if (!msg) {
     fprintf(stderr, "[FATAL] IrcMsg alloc error\n");
-    exit(1);    
+    exit(1);
   }
 
   return msg;
@@ -74,24 +74,33 @@ IrcMsg *ircMsg_irc_new(char *input) {
 }
 
 IrcMsg *ircMsg_server_new(char *input) {
-  IrcMsg *msg = ircMsg_newMsg();;
+  IrcMsg *msg = ircMsg_newMsg();
   int i = 0;
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
 
   msg->server = 1;
   //skip the server
-  tok = strtok_r(input, " ", &tok_off);
+  tok = strtok_r(input, SERVER_INFO_DELIM, &tok_off);
   if (!tok) return msg;
 
   //copy the status code
-  tok = strtok_r(NULL, " ", &tok_off);
+  tok = strtok_r(NULL, SERVER_INFO_DELIM, &tok_off);
   if (!tok) return msg;
   strncpy(msg->action, tok, MAX_CMD_LEN);
 
   //skip the name the server issued the command to
-  tok = strtok_r(NULL, " ", &tok_off);
-  if (!tok || !tok_off || tok_off + 1 >= end) return msg;
+  tok = strtok_r(NULL, SERVER_INFO_DELIM, &tok_off);
+  if (!tok || !tok_off || tok_off + 1 >= end)
+  	return msg;
+
+  //look for channel if any exits
+  char *channel = tok_off;
+  if (*channel == '@') {
+  	channel++;
+  	tok = strtok_r(channel, SERVER_INFO_DELIM, &tok_off);
+  	ircMsg_setChannel(msg, tok);
+  }
 
   //copy the rest of the message
   strncpy(msg->msg, tok_off, MAX_MSG_LEN);

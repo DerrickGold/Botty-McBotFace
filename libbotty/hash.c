@@ -20,6 +20,10 @@ static size_t growSize(size_t oldSize) {
 
 
 HashEntry *HashEntry_create(char *key, void *data) {
+	if (!key) {
+		fprintf(stderr, "ERROR CREATING HASH ENTRY: NULL key value\n");
+		return NULL;
+	}
 
   HashEntry *entry = calloc(1, sizeof(HashEntry));
   if (!entry) {

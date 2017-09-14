@@ -587,7 +587,14 @@ void bot_regName(BotInfo *bot, char *channel, char *nick) {
 
 	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
 	if (!channelList) {
-		channelList = HashEntry_create(channel, NULL);
+		char *hashKey = calloc(1, MAX_CHAN_LEN);
+		if (!hashKey) {
+			fprintf(stderr, "Error allocating channel as nick list hash key!\n");
+			free(newNick);
+			return;
+		}
+		strncpy(hashKey, channel, MAX_CHAN_LEN);
+		channelList = HashEntry_create(hashKey, NULL);
 		HashTable_add(bot->chanNickLists, channelList);
 	}
 
@@ -629,14 +636,28 @@ void bot_rmName(BotInfo *bot, char *channel, char *nick) {
 
 }
 
-void bot_purgeNames(BotInfo *bot) {
-  /*NickList *curNick = bot->names, *next;
+static int purgeNameList(NickList *list) {
+	NickList *curNick = list, *next;
   while (curNick) {
     next = curNick->next;
     free(curNick);
     curNick = next;
   }
-  bot->names = NULL;*/
+  return 0;
+}
+
+static int clearHashedNickList(HashEntry *entry, void *data) {
+	purgeNameList(entry->data);
+	free(entry->key);
+	entry->key = NULL;
+	return 0;
+}
+
+void bot_purgeNames(BotInfo *bot) {
+
+	HashTable_forEach(bot->chanNickLists, NULL, clearHashedNickList);
+	HashTable_destroy(bot->chanNickLists);
+	bot->chanNickLists = NULL;
 }
 
 

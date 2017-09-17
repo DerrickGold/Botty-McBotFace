@@ -288,6 +288,10 @@ static int userNickChange(BotInfo *bot, IrcMsg *msg) {
   return callback_call_r(bot->cb, CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 
+static int userInvite(BotInfo *bot, IrcMsg *msg) {
+	return callback_call_r(bot->cb, CALLBACK_USRINVITE, (void *)bot, msg);
+}
+
 /*
  * Parses any incomming line from the irc server and
  * invokes callbacks depending on the message type and
@@ -383,6 +387,9 @@ int bot_parse(BotInfo *bot, char *line) {
           break;
         case IRC_ACTION_NICK:
           servStat = userNickChange(bot, msg);
+          break;
+        case IRC_ACTION_INVITE:
+        	servStat = userInvite(bot, msg);
           break;
         }
       }

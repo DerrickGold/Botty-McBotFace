@@ -19,9 +19,12 @@ void botty_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char 
 
 void botty_addCommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn);
 
+#define botty_join(bot, channel) \
+	bot_join(bot, channel)
+
 //returns void
 #define botty_setCallback(bot, id, fn)          \
-  bot_setCallback(bot, id, fn);
+  bot_setCallback(bot, id, fn)
 
 //returns int, negative value indicates error
 #define botty_connect(bot) \

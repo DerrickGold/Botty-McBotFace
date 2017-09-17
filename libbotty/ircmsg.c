@@ -96,9 +96,9 @@ IrcMsg *ircMsg_server_new(char *input) {
 
   //look for channel if any exits
   char *channel = tok_off;
-  if (*channel == '@') {
+  if (*channel == '@' || *channel == '=') {
   	channel++;
-  	tok = strtok_r(channel, SERVER_INFO_DELIM, &tok_off);
+  	tok = strtok_r(channel, SERVER_INFO_DELIM":", &tok_off);
   	ircMsg_setChannel(msg, tok);
   }
 

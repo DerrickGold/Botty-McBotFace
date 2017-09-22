@@ -40,14 +40,14 @@ typedef struct BotInfo {
 
   //connection state info
   char recvbuf[MAX_MSG_LEN];
-  char *line_off;
+
   ConState state;
   int nickAttempt;
 
   Callback cb[CALLBACK_COUNT];
   HashTable *commands;
-  //NickList *names;
 
+  BotInputQueue inputQueue;
   BotProcessQueue procQueue;
 
   SSLConInfo conInfo;
@@ -56,8 +56,8 @@ typedef struct BotInfo {
   HashTable *msgQueues;
   HashTable *cmdAliases;
   HashTable *chanNickLists;
+  HashTable *botPermissions;
 
-  BotInputQueue inputQueue;
   //some pointer the user can use
   void *data;
 } BotInfo;

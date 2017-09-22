@@ -536,10 +536,11 @@ int bot_run(BotInfo *bot) {
   }
   //add all messages to input queue
   if (n > 0) {
-    char *line = strtok_r(bot->recvbuf, MSG_FOOTER, &bot->line_off);
+  	char *line_offset = NULL;
+    char *line = strtok_r(bot->recvbuf, MSG_FOOTER, &line_offset);
     while (line) {
       BotInputQueue_enqueueInput(&bot->inputQueue, line);
-      line = strtok_r(NULL, MSG_FOOTER, &bot->line_off);
+      line = strtok_r(NULL, MSG_FOOTER, &line_offset);
     }
   }
 

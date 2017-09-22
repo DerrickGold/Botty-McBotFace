@@ -11,10 +11,10 @@
 /*=====================================================
  * Bot Configuration
  *===================================================*/
-BotInfo conInfo = {
+BotInfo botInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "irc.freenode.net",
+    .server   = "CHANGE ME",
     .channel  = {"#CHANGEME", "\0", "\0", "\0", "\0"}
   },
   .host     = "CIRCBotHost",
@@ -144,6 +144,11 @@ static int onNickChange(void *data, IrcMsg *msg) {
   return 0;
 }
 
+static int onUsrInvite(void *data, IrcMsg *msg) {
+  botty_join((BotInfo *)data, msg->msg);
+  return 0;
+}
+
 static int onServerResp(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
 
@@ -166,7 +171,7 @@ static int onServerResp(void *data, IrcMsg *msg) {
 int botcmd_msg(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
   char *to = args[1], *msg = args[2];
-  
+
   if (!to || !msg) {
     botty_say(data->bot, responseTarget,
                "%s: Malformed mail command, must contain a destination nick and a message.",
@@ -220,7 +225,7 @@ int botcmd_roulette(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
   static roulette game = {.shot = 0, .state = -1};
   char *responseTarget = botcmd_builtin_getTarget(data);
-  
+
   game.loop = 0;
   do {
     switch (game.state) {
@@ -295,7 +300,8 @@ static void printNick(NickList *n, void *data) {
 }
 
 int botcmd_dumpnames(CmdData *data, char *args[MAX_BOT_ARGS]) {
-  bot_foreachName(data->bot, NULL, &printNick);
+  char *responseTarget = botcmd_builtin_getTarget(data);
+  bot_foreachName(data->bot, responseTarget, NULL, &printNick);
   return 0;
 }
 
@@ -379,40 +385,41 @@ int main(int argc, char *argv[]) {
   srand((unsigned) time(&t));
 
   //hook in some callback functions
-  botty_setCallback(&conInfo, CALLBACK_CONNECT, &onConnect);
-  botty_setCallback(&conInfo, CALLBACK_JOIN, &onJoin);
-  botty_setCallback(&conInfo, CALLBACK_MSG, &onMsg);
-  botty_setCallback(&conInfo, CALLBACK_USRJOIN, &onUsrJoin);
-  botty_setCallback(&conInfo, CALLBACK_USRPART, &onUsrPart);
-  botty_setCallback(&conInfo, CALLBACK_SERVERCODE, &onServerResp);
-  botty_setCallback(&conInfo, CALLBACK_USRNICKCHANGE, &onNickChange);
+  botty_setCallback(&botInfo, CALLBACK_CONNECT, &onConnect);
+  botty_setCallback(&botInfo, CALLBACK_JOIN, &onJoin);
+  botty_setCallback(&botInfo, CALLBACK_MSG, &onMsg);
+  botty_setCallback(&botInfo, CALLBACK_USRJOIN, &onUsrJoin);
+  botty_setCallback(&botInfo, CALLBACK_USRPART, &onUsrPart);
+  botty_setCallback(&botInfo, CALLBACK_SERVERCODE, &onServerResp);
+  botty_setCallback(&botInfo, CALLBACK_USRNICKCHANGE, &onNickChange);
+  botty_setCallback(&botInfo, CALLBACK_USRINVITE, &onUsrInvite);
 
-  if (botty_init(&conInfo, argc, argv, 0))
+  if (botty_init(&botInfo, argc, argv, 0))
     return -1;
 
   //register some extra commands
-  botty_addCommand(&conInfo, "say", 0, 2, &botcmd_say);
-  botty_addCommand(&conInfo,"roll", 0, 2, &botcmd_roll);
-  botty_addCommand(&conInfo, "roulette", 0, 1, &botcmd_roulette);
-  botty_addCommand(&conInfo, "nicks", 0, 1, &botcmd_dumpnames);
+  botty_addCommand(&botInfo, "say", 0, 2, &botcmd_say);
+  botty_addCommand(&botInfo,"roll", 0, 2, &botcmd_roll);
+  botty_addCommand(&botInfo, "roulette", 0, 1, &botcmd_roulette);
+  botty_addCommand(&botInfo, "nicks", 0, 1, &botcmd_dumpnames);
 
-  botty_addCommand(&conInfo, "msg", 0, 3, &botcmd_msg);
-  botty_addCommand(&conInfo, "mail", 0, 1, &botcmd_mail);
-  botty_addCommand(&conInfo, "draw", 0, 2, &botcmd_draw);
-  botty_addCommand(&conInfo, "links", 0, 1, &links_print);
+  botty_addCommand(&botInfo, "msg", 0, 3, &botcmd_msg);
+  botty_addCommand(&botInfo, "mail", 0, 1, &botcmd_mail);
+  botty_addCommand(&botInfo, "draw", 0, 2, &botcmd_draw);
+  botty_addCommand(&botInfo, "links", 0, 1, &links_print);
 
-  botty_connect(&conInfo);
+  botty_connect(&botInfo);
 
   //process input 30 times per second
   struct timespec sleepTimer = {
     .tv_sec = 0,
     .tv_nsec = ONE_SEC_IN_NS/120
   };
-  while (((status = botty_process(&conInfo)) >= 0)) {
+  while (((status = botty_process(&botInfo)) >= 0)) {
     //prevent 100% cpu usage
     nanosleep(&sleepTimer, NULL);
   }
-  botty_cleanup(&conInfo);
+  botty_cleanup(&botInfo);
 
   destroyAllMailBoxes();
   links_purge(&ListOfLinks);

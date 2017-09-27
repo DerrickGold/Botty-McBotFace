@@ -252,7 +252,7 @@ int botcmd_builtin_killProcess(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
   ClearQueueContainer container = {data->bot->msgQueues, pid};
   int cleared = HashTable_forEach(data->bot->msgQueues, (void *)&container, &_clearQueueHelper);
-  fprintf(stderr, "Cleared %d pid messages from queue\n", cleared);
+  syslog(LOG_DEBUG, "Cleared %d pid messages from queue", cleared);
 
   BotProcess *toTerminate = BotProcess_findProcessByPid(&data->bot->procQueue, pid);
   if (!toTerminate && !cleared) {
@@ -356,7 +356,7 @@ static int botcmd_builtin_rmAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
     botty_say(data->bot, responseTarget, "%s: Please specify an alias to delete.", caller);
     return 0;
   }
-  
+
   HashEntry *aliasEntry = HashTable_find(bot->cmdAliases, alias);
   if (!aliasEntry) {
     botty_say(data->bot, responseTarget, "%s: Alias '%s' does not exist.", caller);
@@ -368,7 +368,7 @@ static int botcmd_builtin_rmAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
     HashEntry_destroy(aliasEntry);
     botty_say(data->bot, responseTarget, "%s: Deleted alias: %s", caller, alias);
   }
-  
+
   return 0;
 }
 

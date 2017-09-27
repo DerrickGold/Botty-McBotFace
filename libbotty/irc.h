@@ -85,7 +85,7 @@ int bot_send(BotInfo *info, char *target, char *action, char *ctcp, char *msg, .
 
 int bot_ctcp_send(BotInfo *info, char *target, char *command, char *msg, ...);
 
-void bot_regName(BotInfo *bot, char *channel, char *nick);
+int bot_regName(BotInfo *bot, char *channel, char *nick);
 
 void bot_rmName(BotInfo *bot, char *channel, char *nick);
 

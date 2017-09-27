@@ -10,10 +10,10 @@ static int setNonBlock(int fd, char value) {
   int flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0)
     return errno;
-  
+
   if (value)
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  
+
   return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 }
 
@@ -31,7 +31,7 @@ static int getConnectionInfo(const char *addr, const char *port, struct addrinfo
 
   int status = 0;
   if ((status = getaddrinfo(addr, port, &hints, results)) != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+    syslog(LOG_DEBUG, "getaddrinfo: %s", gai_strerror(status));
     return -1;
   }
 
@@ -52,12 +52,12 @@ static int socketConnect(int sockfd, struct addrinfo *res) {
 
     if (r != POLLOUT) {
       close(sockfd);
-      fprintf(stderr, "connect: %s: %d\n", strerror(errno), errno);
+      syslog(LOG_DEBUG, "connect: %s: %d", strerror(errno), errno);
     }
   }
 
 
-  fprintf(stderr, "done: %s: %d\n", strerror(errno), errno);
+  syslog(LOG_DEBUG, "done: %s: %d", strerror(errno), errno);
   return 0;
 }
 
@@ -67,7 +67,7 @@ static int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo 
   int sockfd = -1;
 
   if (!action) {
-    fprintf(stderr, "No socket initialization action provided.\n");
+    syslog(LOG_CRIT, "No socket initialization action provided.");
     return -1;
   }
 
@@ -81,7 +81,7 @@ static int initSockCon(struct addrinfo *res, int (*action)(int, struct addrinfo 
   }
 
   if (p == NULL) {
-    fprintf(stderr, "Failed to apply socket action\n");
+    syslog(LOG_CRIT, "Failed to apply socket action");
     return -1;
   }
 
@@ -97,7 +97,7 @@ int connection_client_init(const char *addr, const char *port, struct addrinfo *
 
   int sockfd = -1;
   if ((sockfd = initSockCon(*res, &socketConnect)) == -1) {
-    fprintf(stderr, "Failed to connect to socket\n");
+    syslog(LOG_CRIT, "Failed to connect to socket");
     return -1;
   }
 
@@ -114,24 +114,24 @@ int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *c
   if (conInfo->ctx == NULL)
     ERR_print_errors_fp(stderr);
 
-  fprintf(stderr, "Starting TCP Connection...\n");
+  syslog(LOG_INFO, "Starting TCP Connection...");
   conInfo->socket = connection_client_init(addr, port, &conInfo->res);
   if (conInfo->socket < 0) return -1;
 
-  fprintf(stderr, "Starting SSL Connection\n");
+  syslog(LOG_INFO, "Starting SSL Connection");
   conInfo->ssl = SSL_new(conInfo->ctx);
   if (!conInfo->ssl) {
     ERR_print_errors_fp(stderr);
     return -1;
   }
 
-  fprintf(stderr, "Binding SSL Connection\n");
+  syslog(LOG_INFO, "Binding SSL Connection");
   if (!SSL_set_fd(conInfo->ssl, conInfo->socket)) {
     ERR_print_errors_fp(stderr);
     return -1;
   }
 
-  fprintf(stderr, "Setting connection state\n");
+  syslog(LOG_INFO, "Setting connection state");
   SSL_set_connect_state(conInfo->ssl);
   int r = 0;
   int events = POLLIN | POLLOUT | POLLERR;
@@ -142,13 +142,13 @@ int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *c
     if (err == SSL_ERROR_WANT_WRITE) {
       events |= POLLOUT;
       events &= ~POLLIN;
-      fprintf(stderr, "Return want write set events %d\n", events);
+      syslog(LOG_INFO, "Return want write set events %d", events);
     } else if (err == SSL_ERROR_WANT_READ) {
       events |= POLLIN;
       events &= ~POLLOUT;
-      fprintf(stderr, "Return want read set events %d\n", events);
+      syslog(LOG_INFO, "Return want read set events %d", events);
     } else {
-      fprintf(stderr, "SSL_Do_handshake return %d error %d errno %d msg %s\n", r, err, errno, strerror(errno));
+      syslog(LOG_CRIT, "SSL_Do_handshake return %d error %d errno %d msg %s", r, err, errno, strerror(errno));
       ERR_print_errors_fp(stderr);
       return -1;
     }
@@ -159,12 +159,12 @@ int connection_ssl_client_init(const char *addr, const char *port, SSLConInfo *c
     } while  (r == 0);
 
     if (r != 1) {
-      fprintf(stderr, "poll return %d error events: %d errno %d %s\n", r, conInfo->servfds.revents, errno, strerror(errno));
+      syslog(LOG_CRIT, "poll return %d error events: %d errno %d %s", r, conInfo->servfds.revents, errno, strerror(errno));
       return -1;
     }
   }
 
-  fprintf(stderr, "SSL Connection Successful!\n");
+  syslog(LOG_NOTICE, "SSL Connection Successful!");
   return 0;
 }
 

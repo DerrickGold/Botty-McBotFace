@@ -8,15 +8,15 @@ BotQueuedInput *BotInput_newQueuedInput(char *input) {
   if (!input || strlen(input) == 0)
     return NULL;
 
-  fprintf(stderr, "Creating new queued input\n");
-  
+  syslog(LOG_INFO, "Creating new queued input");
+
   BotQueuedInput *queuedInput = calloc(1, sizeof(BotQueuedInput));
   if (!queuedInput) {
-    fprintf(stderr, "Failed to allocate new queued input obj for input: %s\n", input);
+    syslog(LOG_CRIT, "Failed to allocate new queued input obj for input: %s", input);
     return NULL;
   }
 
-  fprintf(stderr, "copying message to queued object\n");
+  syslog(LOG_DEBUG, "copying input to queued object: %s", input);
   strncpy(queuedInput->msg, input, MAX_MSG_LEN);
   queuedInput->next = NULL;
   return queuedInput;
@@ -24,7 +24,7 @@ BotQueuedInput *BotInput_newQueuedInput(char *input) {
 
 void BotInput_freeQueuedInput(BotQueuedInput *qInput) {
   if (!qInput) return;
-  
+
   free(qInput);
 }
 
@@ -38,20 +38,18 @@ void BotInputQueue_enqueueInput(BotInputQueue *inputQueue, char *input) {
   if (!inputQueue || !input || strlen(input) == 0)
     return;
 
-  
+
   BotQueuedInput *newInput = BotInput_newQueuedInput(input);
   if (!newInput) {
-    fprintf(stderr, "Failed to queue new input\n");
+    syslog(LOG_CRIT, "Failed to queue new input");
     return;
   }
 
   if (!inputQueue->head) {
-    fprintf(stderr, "New queued input is head!\n");
     inputQueue->head = newInput;
     inputQueue->end = newInput;
   }
   else {
-    fprintf(stderr, "Adding new queued input to end of queue\n");
     inputQueue->end->next = newInput;
     inputQueue->end = newInput;
   }
@@ -63,7 +61,6 @@ BotQueuedInput *BotInputQueue_dequeueInput(BotInputQueue *inputQueue) {
   if (!inputQueue)
     return NULL;
 
-  fprintf(stderr, "Getting next queued message\n");
   BotQueuedInput *nextInput = inputQueue->head;
   inputQueue->head = nextInput->next;
   if (nextInput == inputQueue->end)

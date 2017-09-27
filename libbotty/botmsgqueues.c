@@ -15,7 +15,7 @@ static void initMsgQueue(BotSendMessageQueue *queue) {
 BotQueuedMessage *BotQueuedMsg_newMsg(char *msg, char *responseTarget, size_t len, unsigned int createdByPid) {
   BotQueuedMessage *newMsg = calloc(1, sizeof(BotQueuedMessage));
   if (!newMsg) {
-    fprintf(stderr, "newQueueMsg: Error allocating new message for:\n%s to %s\n", msg, responseTarget);
+    syslog(LOG_CRIT, "newQueueMsg: Error allocating new message for:\n%s to %s", msg, responseTarget);
     return NULL;
   }
   strncpy(newMsg->msg, msg, MAX_MSG_LEN);
@@ -45,7 +45,7 @@ static BotQueuedMessage *popQueueMsg(BotSendMessageQueue *queue) {
   queue->start = poppedMsg->next;
   if (queue->end == poppedMsg) queue->end = NULL;
   queue->count--;
-  fprintf(stderr, "%d queued messages\n", queue->count);
+  syslog(LOG_INFO, "%d queued messages", queue->count);
   return poppedMsg;
 }
 
@@ -58,7 +58,7 @@ static void pushQueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
     queue->end = msg;
   queue->start = msg;
   queue->count++;
-  fprintf(stderr, "%d queued messages\n", queue->count);
+  syslog(LOG_INFO, "%d queued messages", queue->count);
 }
 
 static void enqueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
@@ -78,16 +78,16 @@ static void enqueueMsg(BotSendMessageQueue *queue, BotQueuedMessage *msg) {
 void BotMsgQueue_enqueueTargetMsg(HashTable *msgQueues, char *target, BotQueuedMessage *msg) {
   HashEntry *targetQueue = HashTable_find(msgQueues, target);
   if (!targetQueue) {
-    fprintf(stderr, "Creating new message queue hash for: %s\n", target);
+    syslog(LOG_DEBUG, "Creating new message queue hash for: %s", target);
     BotSendMessageQueue *newQueue = calloc(1, sizeof(BotSendMessageQueue));
     if (!newQueue) {
-      fprintf(stderr, "Error creating message queue for target: %s\n", target);
+      syslog(LOG_CRIT, "Error creating message queue for target: %s", target);
       return;
     }
     size_t targetLen = strlen(target);
     char *queueKey = calloc(1, targetLen + 1);
     if (!queueKey) {
-      fprintf(stderr, "Error creating queue name: %s\n", target);
+      syslog(LOG_CRIT, "Error creating queue name: %s", target);
       return;
     }
     strncpy(queueKey, target, targetLen);
@@ -117,13 +117,13 @@ void BotMsgQueue_processQueue(SSLConInfo *conInfo, BotSendMessageQueue *queue) {
 
   if (queue->isThrottled) {
     queue->lastThrottled = queue->throttled;
-    fprintf(stderr, "resetting throttle limit");
+    syslog(LOG_NOTICE, "resetting throttle limit");
   }
   queue->isThrottled = (queue->throttled != queue->lastThrottled);
 
   int ret = 0;
   if (!connection_client_poll(conInfo, POLLOUT, &ret)) {
-    fprintf(stderr, "processMsgQueue: socket not ready for output\n");
+    syslog(LOG_DEBUG, "processMsgQueue: socket not ready for output");
     return;
   }
 
@@ -133,17 +133,17 @@ void BotMsgQueue_processQueue(SSLConInfo *conInfo, BotSendMessageQueue *queue) {
   switch (msg->status) {
     case QUEUED_STATE_INIT: {
       msg->status = QUEUED_STATE_SENT;
-      fprintf(stdout, "SENDING (%d bytes): %s\n", (int)msg->len, msg->msg);
+      syslog(LOG_DEBUG, "SENDING (%d bytes): %s", (int)msg->len, msg->msg);
       queue->writeStatus = connection_client_send(conInfo, msg->msg, msg->len);
       queue->nextSendTimeMS = calculateNextMsgTime(0);
     } break;
     case QUEUED_STATE_SENT: {
       if (queue->isThrottled) {
-        fprintf(stderr, "Throttled, will retry sending %s\n", msg->msg);
+        syslog(LOG_WARNING, "Throttled, will retry sending %s", msg->msg);
         queue->nextSendTimeMS = calculateNextMsgTime(1);
         msg->status = QUEUED_STATE_INIT;
       } else {
-        fprintf(stderr, "Successfully sent: %d bytes\n", (int)msg->len);
+        syslog(LOG_DEBUG, "Successfully sent: %d bytes", (int)msg->len);
         msg = popQueueMsg(queue);
         freeQueueMsg(msg);
         queue->nextSendTimeMS = calculateNextMsgTime(0);
@@ -155,7 +155,7 @@ void BotMsgQueue_processQueue(SSLConInfo *conInfo, BotSendMessageQueue *queue) {
 static int cleanQueue(HashEntry *entry, void *data) {
   if (entry->data) {
     BotSendMessageQueue *queue = (BotSendMessageQueue *)entry->data;
-    fprintf(stderr, "Cleaning message queue: %s: %d\n", entry->key, queue->count);
+    syslog(LOG_INFO, "Cleaning message queue: %s: %d", entry->key, queue->count);
     while (queue->count > 0) {
       BotQueuedMessage *msg = popQueueMsg(queue);
       if (msg) freeQueueMsg(msg);
@@ -193,7 +193,7 @@ int BotMsgQueue_rmPidMsg(HashTable *msgQueues, char *target, unsigned int pid) {
         queue->count--;
       }
       removed++;
-      fprintf(stderr, "Removed message from queue: %s:%d. %d Message(s) remain.\n", target, pid, queue->count);
+      syslog(LOG_INFO, "Removed message from queue: %s:%d. %d Message(s) remain.", target, pid, queue->count);
     }
     else {
       prevMessage = curMessage;

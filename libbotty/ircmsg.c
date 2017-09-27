@@ -9,7 +9,7 @@ IrcMsg *ircMsg_newMsg(void) {
   IrcMsg *msg = NULL;
   msg = calloc(1, sizeof(IrcMsg));
   if (!msg) {
-    fprintf(stderr, "[FATAL] IrcMsg alloc error\n");
+    syslog(LOG_CRIT, "IrcMsg alloc error");
     exit(1);
   }
 
@@ -18,7 +18,7 @@ IrcMsg *ircMsg_newMsg(void) {
 
 void ircMsg_setChannel(IrcMsg *msg, char *channel) {
   if (!channel) {
-    fprintf(stderr, "Could not set NULL channel to IrcMsg\n");
+    syslog(LOG_CRIT, "Could not set NULL channel to IrcMsg");
     return;
   }
   strncpy(msg->channel, channel, MAX_CHAN_LEN);
@@ -35,7 +35,6 @@ static char *get_nick(IrcMsg *msg, char *input, char **tok_off) {
 static char *get_hostname(IrcMsg *msg, char *input, char **tok_off) {
   //skip host name
   char *tok = strtok_r(NULL, " ", tok_off);
-  //if (!tok) return msg;
   return tok;
 }
 

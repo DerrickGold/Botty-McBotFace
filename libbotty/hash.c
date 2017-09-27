@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <math.h>
 #include "hash.h"
 
@@ -21,13 +22,13 @@ static size_t growSize(size_t oldSize) {
 
 HashEntry *HashEntry_create(char *key, void *data) {
 	if (!key) {
-		fprintf(stderr, "ERROR CREATING HASH ENTRY: NULL key value\n");
+		syslog(LOG_WARNING, "Error creating hash entry: NULL key value");
 		return NULL;
 	}
 
   HashEntry *entry = calloc(1, sizeof(HashEntry));
   if (!entry) {
-    fprintf(stderr, "Error allocating hash data\n");
+    syslog(LOG_CRIT, "Error creating hash data");
     return NULL;
   }
 
@@ -141,13 +142,13 @@ HashTable *HashTable_init(size_t size) {
 
   HashTable *table = calloc(1, sizeof(HashTable));
   if (!table) {
-    fprintf(stderr, "HashTable_init: Error allocating symbol table\n");
+  	syslog(LOG_CRIT, "HashTable_init: Error allocating symbol table");
     return NULL;
   }
   table->size = size;
   table->entries = calloc(size, sizeof(HashEntry*));
   if (!table->entries) {
-    fprintf(stderr, "HashTable_init: Error allocating symtable entries\n");
+    syslog(LOG_CRIT, "HashTable_init: Error allocating symtable entries");
     free(table);
     return NULL;
   }
@@ -178,7 +179,7 @@ int HashTable_resize(HashTable *table, size_t size) {
   do {
     newTable = HashTable_init(size);
     if (!newTable) {
-      fprintf(stderr, "Error initializing new table\n");
+      syslog(LOG_CRIT, "Error resizing table, failed to allocate new table of size: %zu", size);
       return -1;
     }
 
@@ -272,6 +273,11 @@ HashEntry *HashTable_rm(HashTable *table, HashEntry *data) {
 }
 
 HashEntry *HashTable_find(HashTable *table, char *key) {
+
+	if (!key) {
+		syslog(LOG_WARNING, "Error finding hash entry, key is NULL");
+		return NULL;
+	}
 
   HashEntry **position = HashTable_getEntry(table, key);
   if (!position || !*position) {

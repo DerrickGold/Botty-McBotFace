@@ -11,13 +11,13 @@
  */
 int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandFn fn) {
   if (!cmdTable || !cmdtag || !fn) {
-    fprintf(stderr, "Command registration failed:null table, tag, or function given\n");
+    syslog(LOG_CRIT, "Command registration failed:null table, tag, or function given");
     return -1;
   }
-  
+
   BotCmd *newcmd = calloc(1, sizeof(BotCmd));
   if (!newcmd) {
-    perror("Command Alloc Error: ");
+    syslog(LOG_CRIT, "Failed to allocate new BotCmd object");
     return -1;
   }
 
@@ -31,7 +31,7 @@ int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandF
   }
   newcmd->cmd = e->key;
   if (!HashTable_add(cmdTable, e)) {
-    fprintf(stderr, "Error adding command %s to hash\n", cmdtag);
+    syslog(LOG_CRIT, "Error adding command %s to hash (key:%s)", cmdtag, newcmd->cmd);
     return -3;
   }
   return 0;
@@ -45,7 +45,7 @@ BotCmd *command_get(HashTable *cmdTable, char *command) {
 
 int command_call_r(BotCmd *cmd, CmdData *data, char *args[MAX_BOT_ARGS]) {
 if (!cmd) {
-    fprintf(stderr, "Command (%s) is not a registered command\n", cmd->cmd);
+    syslog(LOG_WARNING, "Command (%s) is not a registered command", cmd->cmd);
     return -1;
   }
   return cmd->fn(data, args);
@@ -83,27 +83,27 @@ void command_alias_free(HashEntry *entry) {
 
 int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, char *cmd) {
   if (!cmdAliases || !alias || !cmd) {
-    fprintf(stderr, "Command Alias registration failed:null table, alias, or command given\n");
+    syslog(LOG_CRIT, "Command Alias registration failed:null table, alias, or command given");
     return -1;
   }
 
   //first check that the alias doesn't already exist or map to an existing command
   BotCmd *checkCmd = command_get(cmdTable, alias);
   if (checkCmd) {
-    fprintf(stderr, "Cannot override an existing command with an alias: %s\n", alias);
+    syslog(LOG_WARNING, "Cannot override an existing command with an alias: %s", alias);
     return ALIAS_ERR_CMDEXISTS;
   }
 
   CmdAlias *checkAlias = command_alias_get(cmdAliases, alias);
   if (checkAlias) {
-    fprintf(stderr, "Alias for %s already exists.\n", alias);
+    syslog(LOG_WARNING, "Alias for %s already exists.", alias);
     return ALIAS_ERR_ALREADYEXISTS;
   }
 
   size_t keyLen = strlen(alias);
   char *key = calloc(1, keyLen + 1);
   if (!key) {
-    perror("Alias key allocation error: ");
+    syslog(LOG_CRIT, "Error allocating alias key: %s", alias);
     return -1;
   }
   strncpy(key, alias, keyLen);
@@ -111,7 +111,7 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
 
   CmdAlias *aliasData = calloc(1, sizeof(CmdAlias));
   if (!aliasData) {
-    perror("Failed to allocate CmdAlias Struct: ");
+    syslog(LOG_CRIT, "Error allocating CmdAlias object");
     return -1;
   }
 
@@ -120,7 +120,7 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
   aliasData->replaceWith = calloc(1, cmdLen + 1);
   if (!aliasData->replaceWith) {
     free(key);
-    perror("Alias command allocation error: ");
+    syslog(LOG_CRIT, "Error allocating space to hold alias command");
     return -1;
   }
   strncpy(aliasData->replaceWith, cmd, cmdLen);
@@ -133,14 +133,14 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
 
   BotCmd *regCmd = command_get(cmdTable, tok);
   if (!regCmd) {
-    fprintf(stderr, "Cannot alias command that doesn't exist: %s\n", tok);
+    syslog(LOG_WARNING, "Cannot alias command that doesn't exist: %s", tok);
     return ALIAS_ERR_CMDNOTFOUND;
   }
 
   aliasData->cmd = regCmd;
   aliasData->args[0] = aliasData->cmd->cmd;
   aliasData->argc = 1;
-  fprintf(stderr, "ALIAS ARG[0]: %s\n", aliasData->args[0]);
+  syslog(LOG_DEBUG, "ALIAS ARG[0]: %s", aliasData->args[0]);
   if (tok_off) {
     tok = tok_off + 1;
     int i = 1;
@@ -148,7 +148,7 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
       tok_off = strchr(tok, BOT_ARG_DELIM);
       if (tok_off && i < regCmd->args - 1) *tok_off = '\0';
       aliasData->args[i] = tok;
-      fprintf(stderr, "ALIAS ARG[%d]: %s\n", i, aliasData->args[i]);
+      syslog(LOG_DEBUG, "ALIAS ARG[%d]: %s", i, aliasData->args[i]);
       aliasData->argc++;
       if (!tok_off) break;
       tok_off++;
@@ -159,14 +159,14 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
 
   HashEntry *e = HashEntry_create(key, aliasData);
   if (!e) {
-    fprintf(stderr, "Error creating hash entry for alias\n");
+    syslog(LOG_CRIT, "Error creating hash entry for alias");
     free(key);
     command_alias_freeAlias(aliasData);
     return -4;
   }
   if (!HashTable_add(cmdAliases, e)) {
     command_alias_free(e);
-    fprintf(stderr, "Error adding alias %s to hash\n", alias);
+    syslog(LOG_CRIT, "Error adding alias %s to hash", alias);
     return -5;
   }
   return ALIAS_ERR_NONE;
@@ -187,12 +187,12 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
   char *tok = msg->msg + 1;
   char *tok_off = NULL;
   int i = 0;
-  
+
   while(i < argCount) {
     tok_off = strchr(tok, BOT_ARG_DELIM);
     if (tok_off && i < argCount - 1) *tok_off = '\0';
     msg->msgTok[i] = tok;
-    
+
     if (i == 0) {
       cmd = command_get(cmdTable, msg->msgTok[0]);
       if (cmd)  argCount = cmd->args;
@@ -202,11 +202,11 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
           argCount = alias->cmd->args;
           for (i = 0; i < alias->argc; i++)
             msg->msgTok[i] = alias->args[i];
-          
+
           i--;
         }
       }
-    }  
+    }
     if (!tok_off) break;
     tok_off++;
     tok = tok_off;

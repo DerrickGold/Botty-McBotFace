@@ -1,6 +1,7 @@
 #ifndef __GLOBALS_H__
 #define __GLOBALS_H__
 
+#include <syslog.h>
 #include <time.h>
 #include "hash.h"
 

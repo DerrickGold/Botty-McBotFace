@@ -8,7 +8,7 @@ static Callback cb[CALLBACK_COUNT];
  */
 void callback_set_r(Callback collection[CALLBACK_COUNT], BotCallbackID id, Callback fn) {
   if (id > CALLBACK_COUNT) {
-    fprintf(stderr, "setcb: Callback ID %d does not exist\n", (int)id);
+    syslog(LOG_ERR, "setcb: Callback ID %d does not exist", (int)id);
     return;
   }
   collection[id] = fn;
@@ -21,7 +21,7 @@ void callback_set(BotCallbackID id, Callback fn) {
 
 int callback_call_r(Callback collection[CALLBACK_COUNT], BotCallbackID id, void *data, IrcMsg *msg) {
   if (id > CALLBACK_COUNT) {
-    fprintf(stderr, "callcb: Callback ID %d does not exist\n", (int)id);
+    syslog(LOG_ERR, "callcb: Callback ID %d does not exist", (int)id);
     return -1;
   }
 

@@ -68,11 +68,11 @@ static int _send(BotInfo *bot, char *command, char *target, char *msg, char *ctc
   if (queued) {
     BotQueuedMessage *toSend = BotQueuedMsg_newMsg(curSendBuf, target, written, bot->procQueue.curPid);
     if (toSend) BotMsgQueue_enqueueTargetMsg(bot->msgQueues, target, toSend);
-    else fprintf(stderr, "Failed to queue message: %s\n", curSendBuf);
+    else syslog(LOG_CRIT, "Failed to queue message: %s", curSendBuf);
     return 0;
   }
 
-  fprintf(stdout, "SENDING (%d bytes): %s\n", written, curSendBuf);
+  syslog(LOG_INFO, "SENDING (%d bytes): %s", written, curSendBuf);
   return connection_client_send(conInfo, curSendBuf, written);
 }
 
@@ -141,8 +141,7 @@ int bot_irc_send(BotInfo *bot, char *msg) {
 static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *fmt, va_list a) {
   char *msgBuf;
   if (!target) {
-    //target = bot->info->channel;
-    fprintf(stderr, "_botSend: No response target provided!\n");
+    syslog(LOG_WARNING, "_botSend: No response target provided!");
     return 0;
   }
 
@@ -151,7 +150,7 @@ static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *
   size_t msgBufLen = MAX_MSG_LEN * MAX_MSG_SPLITS;
   msgBuf = malloc(msgBufLen);
   if (!msgBuf) {
-    perror("Msg alloc failed:");
+  	syslog(LOG_CRIT, "_botSend: Message buffer allocation failed for msg length %zu", msgBufLen);
     return -1;
   }
   vsnprintf(msgBuf, msgBufLen - 1, fmt, a);
@@ -189,7 +188,7 @@ static int findThrottleTarget(HashEntry *queueHashEntry, void *data) {
   if (match) {
     BotSendMessageQueue *sendQueue = (BotSendMessageQueue *)queueHashEntry->data;
     sendQueue->throttled++;
-    fprintf(stderr, "Detected throttling from: %s\n", queueHashEntry->key);
+    syslog(LOG_WARNING, "Detected throttling from: %s", queueHashEntry->key);
     return 1;
   }
   return 0;
@@ -208,6 +207,14 @@ static char isPostRegisterMsg(char *code) {
   			!strncmp(code, POST_REG_MSG1, strlen(POST_REG_MSG3));
 }
 
+static void registerBotNick(BotInfo *bot) {
+	char sysBuf[MAX_MSG_LEN];
+  snprintf(sysBuf, sizeof(sysBuf), NICK_CMD_STR" %s", bot->nick[bot->nickAttempt]);
+  bot_irc_send(bot, sysBuf);
+  snprintf(sysBuf, sizeof(sysBuf), USER_CMD_STR" %s %s test: %s", bot->ident, bot->host, bot->realname);
+  bot_irc_send(bot, sysBuf);
+}
+
 /*
  * Default actions for handling various server responses such as nick collisions
  * or throttling
@@ -217,29 +224,36 @@ static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
   if (!strncmp(msg->action, REG_ERR_CODE, strlen(REG_ERR_CODE))) {
     if (bot->nickAttempt < NICK_ATTEMPTS) bot->nickAttempt++;
     else {
-      fprintf(stderr, "Exhuasted nick attempts, please configure a unique nick\n");
+      syslog(LOG_CRIT, "Exhuasted nick attempts, please configure a unique nick");
       return -1;
     }
-    fprintf(stderr, "Nick is already in use, attempting to use: %s\n", bot->nick[bot->nickAttempt]);
-    //then attempt registration again
-    bot->state = CONSTATE_CONNECTED;
+    syslog(LOG_WARNING, "Nick is already in use, attempting to use: %s", bot->nick[bot->nickAttempt]);
+    registerBotNick(bot);
     //return bot_parse(bot, line);
     return 0;
   }
   //otherwise, nick is not in use
   else if (!bot->joined && isPostRegisterMsg(msg->action)) {
-    bot->state = CONSTATE_REGISTERED;
+  	for (int i = 0; i < MAX_CONNECTED_CHANS; i++) {
+      char *chan = bot->info->channel[i];
+      if (*chan == '\0')
+        break;
+
+      bot_join(bot, chan);
+    }
+    bot->joined = 1;
+    bot->state = CONSTATE_LISTENING;
   }
   //store all current users in the channel
   else if (!strncmp(msg->action, NAME_REPLY, strlen(NAME_REPLY))) {
-  	fprintf(stderr, "REGNICK: %s\n", msg->msgTok[0]);
+  	syslog(LOG_INFO, "REGNICK: %s", msg->msgTok[0]);
     char *start = msg->msgTok[0], *next = start, *end = start + strlen(start);
     while (start < end) {
       while (*next != BOT_ARG_DELIM && next <= end) next++;
       *next = '\0';
-      fprintf(stdout, "Getting nick: %s from %s\n", start, msg->channel);
+      syslog(LOG_INFO, "Getting nick: %s from %s", start, msg->channel);
       bot_regName(bot, msg->channel, start);
-      fprintf(stdout, "Registered nick: %s from %s\n", start, msg->channel);
+      syslog(LOG_NOTICE, "Registered nick: %s from %s", start, msg->channel);
       if (next < end) {
         *next = BOT_ARG_DELIM;
         next++;
@@ -280,7 +294,13 @@ static int parseServer(BotInfo *bot, char *line) {
 }
 
 static int userJoined(BotInfo *bot, IrcMsg *msg) {
-  bot_regName(bot, msg->channel, msg->nick);
+	if (!strlen(msg->channel))
+		strncpy(msg->channel, msg->msg, MAX_CHAN_LEN);
+
+	int status = 0;
+  if ((status = bot_regName(bot, msg->channel, msg->nick)) < 0)
+  	return status;
+
   return callback_call_r(bot->cb, CALLBACK_USRJOIN, (void *)bot, msg);
 }
 
@@ -291,7 +311,11 @@ static int userLeft(BotInfo *bot, IrcMsg *msg) {
 
 static int userNickChange(BotInfo *bot, IrcMsg *msg) {
   bot_rmName(bot, msg->channel, msg->nick);
-  bot_regName(bot, msg->channel, msg->msg);
+
+  int status = 0;
+  if ((status = bot_regName(bot, msg->channel, msg->msg)) < 0)
+  	return status;
+
   return callback_call_r(bot->cb, CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 
@@ -310,7 +334,7 @@ int bot_parse(BotInfo *bot, char *line) {
   int servStat = 0;
   char sysBuf[MAX_MSG_LEN];
   char *space = NULL, *space_off = NULL;
-  fprintf(stdout, "SERVER: %s\n", line);
+  syslog(LOG_INFO, "SERVER: %s", line);
 
   //respond to server pings
   if (!strncmp(line, PING_STR, strlen(PING_STR))) {
@@ -330,32 +354,11 @@ int bot_parse(BotInfo *bot, char *line) {
     if (space) {
       //grab new server name if we've been redirected
       memcpy(bot->info->server, space+1, strlen(space) - 1);
-      fprintf(stderr, "given server: %s\n", bot->info->server);
+      syslog(LOG_NOTICE, "redirecting to given server: %s", bot->info->server);
     }
     callback_call_r(bot->cb, CALLBACK_CONNECT, (void*)bot, NULL);
-    bot->state = CONSTATE_CONNECTED;
-    break;
-
-  case CONSTATE_CONNECTED:
-    //register the bot
-    snprintf(sysBuf, sizeof(sysBuf), NICK_CMD_STR" %s", bot->nick[bot->nickAttempt]);
-    bot_irc_send(bot, sysBuf);
-    snprintf(sysBuf, sizeof(sysBuf), USER_CMD_STR" %s %s test: %s", bot->ident, bot->host, bot->realname);
-    bot_irc_send(bot, sysBuf);
-    //go to listening state to wait for registration confirmation
+    registerBotNick(bot);
     bot->state = CONSTATE_LISTENING;
-    break;
-
-  case CONSTATE_REGISTERED:
-    for (int i = 0; i < MAX_CONNECTED_CHANS; i++) {
-      char *chan = bot->info->channel[i];
-      if (*chan == '\0')
-        break;
-      bot_join(bot, chan);
-    }
-    bot->joined = 1;
-    bot->state = CONSTATE_LISTENING;
-    break;
   default:
   case CONSTATE_LISTENING:
     //filter out server messages
@@ -376,9 +379,9 @@ int bot_parse(BotInfo *bot, char *line) {
         CmdData data = { .bot = bot, .msg = msg };
         //make sure who ever is calling the command has permission to do so
         if (cmd->flags & CMDFLAG_MASTER && strcmp(msg->nick, bot->master))
-          fprintf(stderr, "%s is not %s\n", msg->nick, bot->master);
+          syslog(LOG_WARNING, "Invalid permission: %s is not bot owner %s", msg->nick, bot->master);
         else if ((servStat = command_call_r(cmd, &data, msg->msgTok)) < 0)
-          fprintf(stderr, "Command '%s' gave exit code\n,", cmd->cmd);
+          syslog(LOG_NOTICE, "Command '%s' gave exit code", cmd->cmd);
       }
       else if ((a = HashTable_find(IrcApiActions, msg->action))) {
         if (a->data) action = *(IRC_API_Actions*)a->data;
@@ -418,7 +421,7 @@ int bot_irc_init(void) {
 
   IrcApiActions = HashTable_init(ACTION_HASH_SIZE);
   if (!IrcApiActions) {
-    fprintf(stderr, "Error initializing IRC API hash\n");
+    syslog(LOG_CRIT, "bot_irc_init: Error initializing IRC API hash");
     return -1;
   }
 
@@ -441,7 +444,7 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
 
   bot->commands = HashTable_init(COMMAND_HASH_SIZE);
   if (!bot->commands) {
-    fprintf(stderr, "Error allocating command hash for bot\n");
+    syslog(LOG_CRIT, "bot_init: Error allocating command hash for bot");
     return -1;
   }
   //initialize the built in commands
@@ -449,19 +452,19 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
 
   bot->msgQueues = HashTable_init(QUEUE_HASH_SIZE);
   if (!bot->msgQueues) {
-    fprintf(stderr, "Error initializing Bot Message Queue hash\n");
+    syslog(LOG_CRIT, "bot_init: Error initializing Bot Message Queue hash");
     return -1;
   }
 
   bot->cmdAliases = HashTable_init(ALIAS_HASH_SIZE);
   if (!bot->cmdAliases) {
-    fprintf(stderr, "Error initialize bot cmd alias hash\n");
+    syslog(LOG_CRIT, "bot_init: Error initialize bot cmd alias hash");
     return -1;
   }
 
   bot->chanNickLists = HashTable_init(CHANNICKS_HASH_SIZE);
   if (!bot->chanNickLists) {
-  	fprintf(stderr, "Error initializing hash table for channel nick lists\n");
+  	syslog(LOG_CRIT, "bot_init: Error initializing hash table for channel nick lists");
   	return -1;
   }
 
@@ -520,24 +523,16 @@ void bot_setCallback(BotInfo *bot, BotCallbackID id, Callback fn) {
 int bot_run(BotInfo *bot) {
   int n = 0, ret = 0;
 
-  if (!bot->joined && bot->state == CONSTATE_LISTENING) {
-    TimeStamp_t currentTime = botty_currentTimestamp();
-    if (bot->startTime == 0) bot->startTime = botty_currentTimestamp();
-    else if(currentTime - bot->startTime >= REGISTER_TIMEOUT_SEC * ONE_SEC_IN_MS) {
-      bot->state = CONSTATE_REGISTERED;
-    }
-  }
-
   //read from wire
   memset(bot->recvbuf, 0, sizeof(bot->recvbuf));
   if (connection_client_poll(&bot->conInfo, POLLIN, &ret)) {
     n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
     if (!n) {
-      fprintf(stderr, "Remote closed connection\n");
+      syslog(LOG_NOTICE, "Remote closed connection");
       return -2;
     }
     else if (!bot->conInfo.enableSSL && n < 0) {
-      perror("Response error: ");
+    	syslog(LOG_CRIT, "bot_run: Error getting response from connection");
       return -3;
     }
   }
@@ -568,11 +563,11 @@ int bot_run(BotInfo *bot) {
 
 void bot_join(BotInfo *bot, char *channel) {
   if (!channel) {
-    fprintf(stderr, "bot_join: Cannot join NULL channel\n");
+    syslog(LOG_WARNING, "bot_join: Cannot join NULL channel");
     return;
   }
 
-  fprintf(stderr, "bot_join: %s...\n", channel);
+  syslog(LOG_NOTICE, "bot_join: %s...", channel);
 
   char sysBuf[MAX_MSG_LEN];
   snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", channel);
@@ -587,26 +582,37 @@ void bot_join(BotInfo *bot, char *channel) {
 /*
  * Keep a list of all nicks in the channel
  */
-void bot_regName(BotInfo *bot, char *channel, char *nick) {
+int bot_regName(BotInfo *bot, char *channel, char *nick) {
+
+	if (!nick) {
+		syslog(LOG_CRIT, "Error registering nick to channel: Nick is NULL");
+		return -1;
+	}
+
+	if (!channel) {
+		syslog(LOG_CRIT, "Error registering nick '%s' to channel: Channel is NULL", nick);
+		return -1;
+	}
+
   NickList *curNick;
   NickList *newNick = calloc(1, sizeof(NickList));
   if (!newNick) {
     perror("NickList Alloc Error: ");
-    exit(1);
+    return -1;
   }
 
   size_t diff = strcspn(nick, ILLEGAL_NICK_CHARS);
   nick += (diff == 0);
-  fprintf(stderr, "Registering Nick: %s\n", nick);
+  syslog(LOG_NOTICE, "Registering Nick: %s", nick);
   strncpy(newNick->nick, nick, MAX_NICK_LEN);
 
 	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
 	if (!channelList) {
 		char *hashKey = calloc(1, MAX_CHAN_LEN);
 		if (!hashKey) {
-			fprintf(stderr, "Error allocating channel as nick list hash key!\n");
+			syslog(LOG_CRIT, "Error allocating channel as nick list hash key.");
 			free(newNick);
-			return;
+			return -1;
 		}
 		strncpy(hashKey, channel, MAX_CHAN_LEN);
 		channelList = HashEntry_create(hashKey, NULL);
@@ -617,11 +623,12 @@ void bot_regName(BotInfo *bot, char *channel, char *nick) {
   if (!curNick) {
     //first name
     channelList->data = (void *)newNick;
-    return;
+    return -1;
   }
 
   while (curNick->next) curNick = curNick->next;
   curNick->next = newNick;
+  return 0;
 }
 
 void bot_rmName(BotInfo *bot, char *channel, char *nick) {
@@ -629,14 +636,14 @@ void bot_rmName(BotInfo *bot, char *channel, char *nick) {
 
 	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
 	if (!channelList) {
-		fprintf(stderr, "Error: Attempted to remove nick from channel nick list that doesn't exist\n");
+		syslog(LOG_WARNING, "Error: Attempted to remove nick from channel nick list that doesn't exist");
 		return;
 	}
 
   curNick = (NickList *)channelList->data;
   lastNick = curNick;
   while (curNick && strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
-    fprintf(stderr, "Matching: %s with %s\n", curNick->nick, nick);
+    syslog(LOG_INFO, "Matching: %s with %s", curNick->nick, nick);
     lastNick = curNick;
     curNick = curNick->next;
   }
@@ -647,7 +654,7 @@ void bot_rmName(BotInfo *bot, char *channel, char *nick) {
     else lastNick->next = curNick->next;
     free(curNick);
   } else
-    fprintf(stderr, "Failed to remove \'%s\' from nick list, does not exist\n", nick);
+    syslog(LOG_WARNING, "Failed to remove \'%s\' from nick list, does not exist", nick);
 
 }
 
@@ -679,7 +686,7 @@ void bot_purgeNames(BotInfo *bot) {
 void bot_foreachName(BotInfo *bot, char *channel, void *d, void (*fn) (NickList *nick, void *data)) {
 	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
 	if (!channelList) {
-		fprintf(stderr, "Error iterating through nicks in channel %s, no nicks registered here.\n", channel);
+		syslog(LOG_CRIT, "Error iterating through nicks in channel %s, no nicks registered here.", channel);
 		return;
 	}
 

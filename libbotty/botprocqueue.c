@@ -34,7 +34,7 @@ void BotProcess_freeArgs(BotProcessArgs *args) {
 unsigned int BotProcess_queueProcess(BotProcessQueue *procQueue, BotProcessFn fn, BotProcessArgs *args, char *cmd, char *caller) {
   BotProcess *process = calloc(1, sizeof(BotProcess));
   if (!process) {
-    fprintf(stderr, "bot_queueProcess: error allocating new process\n");
+    syslog(LOG_CRIT, "bot_queueProcess: error allocating new process");
     return 0;
   }
 
@@ -60,7 +60,7 @@ unsigned int BotProcess_queueProcess(BotProcessQueue *procQueue, BotProcessFn fn
     process->pid = (++procQueue->pidTicker);
 
   snprintf(process->details, MAX_MSG_LEN, "PID: %d: %s - %s", process->pid, cmd, caller);
-  fprintf(stderr, "bot_queueProcess: Added new process to queue:\n %s\n", process->details);
+  syslog(LOG_DEBUG, "bot_queueProcess: Added new process to queue:\n %s", process->details);
   return process->pid;
 }
 
@@ -86,7 +86,7 @@ unsigned int BotProcess_dequeueProcess(BotProcessQueue *procQueue, BotProcess *p
   //if process is dequeued while it was running, cleanup the process data
   if (process->busy >= 0) BotProcess_freeArgs(process->arg);
 
-  fprintf(stderr, "bot_queueProcess: Removed process:\n %s\n", process->details);
+  syslog(LOG_DEBUG, "bot_queueProcess: Removed process:\n %s", process->details);
   free(process);
   return pid;
 }
@@ -99,9 +99,9 @@ BotProcess *BotProcess_findProcessByPid(BotProcessQueue *procQueue, unsigned int
   }
 
   if (!process)
-    fprintf(stderr, "Failed to located PID: %d\n", pid);
+    syslog(LOG_WARNING, "Failed to located PID: %d", pid);
   else
-    fprintf(stderr, "Located Process:\n %s\n", process->details);
+    syslog(LOG_DEBUG, "Located Process:\n %s", process->details);
 
   return process;
 }

@@ -14,7 +14,7 @@
 BotInfo botInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "CHANGE ME",
+    .server   = "CHANGEME.net",
     .channel  = {"#CHANGEME", "\0", "\0", "\0", "\0"}
   },
   .host     = "CIRCBotHost",
@@ -101,7 +101,7 @@ void links_purge(LinksHead *list);
  * features or logic to notable  responses or events.
  */
 static int onConnect(void *data, IrcMsg *msg) {
-  printf("BOT HAS CONNECTED!\n");
+  syslog(LOG_INFO, "BOT HAS CONNECTED!");
   return 0;
 }
 
@@ -113,7 +113,7 @@ static int onJoin(void *data, IrcMsg *msg) {
 static int onMsg(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
 
-  printf("Recieved msg from %s in %s: %s\n", msg->nick, msg->channel, msg->msg);
+  syslog(LOG_DEBUG, "Recieved msg from %s in %s: %s", msg->nick, msg->channel, msg->msg);
   mailNotify((BotInfo *)data, msg->channel,  msg->nick);
   links_store(&ListOfLinks, msg->msg);
   return 0;
@@ -121,14 +121,14 @@ static int onMsg(void *data, IrcMsg *msg) {
 
 static int onUsrJoin(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
-  printf("'%s' has joined the channel\n", msg->nick);
+  syslog(LOG_INFO, "'%s' has joined the channel", msg->nick);
   mailNotify((BotInfo *)data, msg->channel, msg->nick);
   return 0;
 }
 
 static int onUsrPart(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
-  fprintf(stderr, "%s has left the channel\n", msg->nick);
+  syslog(LOG_INFO, "%s has left the channel", msg->nick);
 
   //reset mail notification
   char *notStatus = getNotified(msg->nick);
@@ -152,11 +152,11 @@ static int onUsrInvite(void *data, IrcMsg *msg) {
 static int onServerResp(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
 
-  fprintf(stderr, "Received code: %s\n", msg->action);
+  syslog(LOG_DEBUG, "Received code: %s", msg->action);
   for (int i = 0; i < MAX_PARAMETERS; i++) {
     if (!msg->msgTok[i]) break;
 
-    fprintf(stderr, "Parameter %d: %s\n", i, msg->msgTok[i]);
+    syslog(LOG_DEBUG, "Parameter %d: %s", i, msg->msgTok[i]);
   }
 
   return 0;
@@ -296,7 +296,7 @@ int botcmd_roll(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
 
 static void printNick(NickList *n, void *data) {
-  fprintf(stdout, "NICKDUMP: %s\n", n->nick);
+  syslog(LOG_INFO, "NICKDUMP: %s", n->nick);
 }
 
 int botcmd_dumpnames(CmdData *data, char *args[MAX_BOT_ARGS]) {
@@ -380,6 +380,8 @@ int botcmd_draw(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
 
 int main(int argc, char *argv[]) {
+
+  openlog(argv[0], LOG_PERROR | LOG_CONS | LOG_PID, LOG_USER);
   int status = 0;
   time_t t;
   srand((unsigned) time(&t));
@@ -423,6 +425,8 @@ int main(int argc, char *argv[]) {
 
   destroyAllMailBoxes();
   links_purge(&ListOfLinks);
+
+  closelog();
   return status;
 }
 
@@ -461,7 +465,7 @@ int saveMail(char *to, char *from, char *message) {
   if (!mailBoxes) {
     mailBoxes = HashTable_init(MIN_MAIL_BOXES);
     if (!mailBoxes) {
-      fprintf(stderr, "ERROR ALLOCATING MAILBOXES\n");
+      syslog(LOG_CRIT, "ERROR ALLOCATING MAILBOXES");
       return -1;
     }
   }
@@ -469,46 +473,46 @@ int saveMail(char *to, char *from, char *message) {
   //make sure the user has an inbox
   HashEntry *user = HashTable_find(mailBoxes, to);
   if (!user) {
-    fprintf(stdout, "'%s' does not have a box, creating one...\n", to);
+    syslog(LOG_NOTICE, "'%s' does not have a box, creating one...", to);
     MailBox *newBox = calloc(1, sizeof(MailBox));
     if (!newBox) {
-      fprintf(stderr, "error allocating message box for user %s\n", to);
+      syslog(LOG_CRIT, "error allocating message box for user %s", to);
       return -1;
     }
 
     char *nick = calloc(1, strlen(to) + 1);
     if (!nick) {
-      fprintf(stderr, "error allocating nick for user's inbox\n");
+      syslog(LOG_CRIT, "error allocating nick for user's inbox");
       return -1;
     }
     strncpy(nick, to, strlen(to));
 
     HashEntry *newUser = HashEntry_create(nick, newBox);
     if (!newUser) {
-      fprintf(stderr, "Error allocating mailbox for nick: %s\n", nick);
+      syslog(LOG_CRIT, "Error allocating mailbox for nick: %s", nick);
       free(nick);
       cleanupMailBox(newBox);
       return -1;
     }
-    fprintf(stdout, "Adding '%s' to mailbox hash\n", nick);
+    syslog(LOG_NOTICE, "Adding '%s' to mailbox hash", nick);
     if (!HashTable_add(mailBoxes, newUser)) {
-      fprintf(stderr, "Error adding %s's mail box to the hash\n", nick);
+      syslog(LOG_CRIT, "Error adding %s's mail box to the hash", nick);
       cleanupHashedBox(newUser, NULL);
       return -1;
     }
-    fprintf(stdout, "Searching hash for '%s''s box\n", nick);
+    syslog(LOG_DEBUG, "Searching hash for '%s''s box", nick);
     user = HashTable_find(mailBoxes, nick);
     if (!user) {
-      fprintf(stderr, "Fatal error, could not retrieve created user (%s)\n", nick);
+      syslog(LOG_CRIT, "Fatal error, could not retrieve created user (%s)", nick);
       return -1;
     }
-    fprintf(stdout, "'%s''s box was found\n", nick);
+    syslog(LOG_DEBUG, "'%s''s box was found", nick);
   }
 
   //make the new mail message to store
   Mail *newMail = calloc(1, sizeof(Mail));
   if (!newMail) {
-    fprintf(stderr, "error allocating new mail for nick %s\n", to);
+    syslog(LOG_CRIT, "error allocating new mail for nick %s", to);
     return -1;
   }
   time(&newMail->sent);
@@ -543,19 +547,19 @@ char *getNotified(char *nick) {
 //get the number of messages available for a user
 int numMsgs(char *nick) {
   if (!mailBoxes) {
-    fprintf(stderr, "NUMMSGS NO BOXES\n");
+    syslog(LOG_DEBUG, "numMsgs: no global mailbox allocated.");
     return 0;
   }
 
   HashEntry *user = HashTable_find(mailBoxes, nick);
   if (!user) {
-    fprintf(stderr, "NUMMSGS NO USER: '%s'\n", nick);
+    syslog(LOG_DEBUG, "numMsgs: no user: '%s'", nick);
     return 0;
   }
 
   MailBox *box = (MailBox *)user->data;
   if (box->count <= 0 || !box->messages) {
-    fprintf(stderr, "NUMMSGS NO MAIL\n");
+    syslog(LOG_DEBUG, "numMsgs: %s has no mail", nick);
     return 0;
   }
 

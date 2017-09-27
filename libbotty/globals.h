@@ -56,6 +56,9 @@
 #define MAX_PARAMETERS 15
 
 #define REG_SUC_CODE "001"
+#define POST_REG_MSG1 "002"
+#define POST_REG_MSG2 "003"
+#define POST_REG_MSG3 "004"
 #define NAME_REPLY "353"
 #define REG_ERR_CODE "433"
 #define NOTICE_ACTION "NOTICE"

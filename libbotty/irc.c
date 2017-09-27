@@ -201,6 +201,13 @@ static int handleMessageThrottling(BotInfo *bot, char *serverMessage) {
   return HashTable_forEach(bot->msgQueues, (void *)serverMessage, &findThrottleTarget);
 }
 
+static char isPostRegisterMsg(char *code) {
+	return !strncmp(code, REG_SUC_CODE, strlen(REG_SUC_CODE)) ||
+  			!strncmp(code, POST_REG_MSG1, strlen(POST_REG_MSG1)) ||
+  			!strncmp(code, POST_REG_MSG2, strlen(POST_REG_MSG2)) ||
+  			!strncmp(code, POST_REG_MSG1, strlen(POST_REG_MSG3));
+}
+
 /*
  * Default actions for handling various server responses such as nick collisions
  * or throttling
@@ -220,7 +227,7 @@ static int defaultServActions(BotInfo *bot, IrcMsg *msg, char *line) {
     return 0;
   }
   //otherwise, nick is not in use
-  else if (!strncmp(msg->action, REG_SUC_CODE, strlen(REG_SUC_CODE))) {
+  else if (!bot->joined && isPostRegisterMsg(msg->action)) {
     bot->state = CONSTATE_REGISTERED;
   }
   //store all current users in the channel

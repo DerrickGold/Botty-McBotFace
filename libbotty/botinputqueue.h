@@ -21,5 +21,6 @@ void BotInputQueue_enqueueInput(BotInputQueue *inputQueue, char *input);
 BotQueuedInput *BotInputQueue_dequeueInput(BotInputQueue *inputQueue);
 void BotInputQueue_initQueue(BotInputQueue *inputQueue);
 void BotInputQueue_clearQueue(BotInputQueue *inputQueue);
+void BotInputQueue_pushInput(BotInputQueue *inputQueue, char *input);
 
 #endif

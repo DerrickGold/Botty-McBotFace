@@ -41,7 +41,7 @@ void BotInputQueue_enqueueInput(BotInputQueue *inputQueue, char *input) {
 
   BotQueuedInput *newInput = BotInput_newQueuedInput(input);
   if (!newInput) {
-    syslog(LOG_CRIT, "Failed to queue new input");
+   	syslog(LOG_CRIT, "Failed to allocate new queued input object: msg: %s", input);
     return;
   }
 
@@ -83,4 +83,22 @@ void BotInputQueue_clearQueue(BotInputQueue *inputQueue) {
   }
 }
 
+
+void BotInputQueue_pushInput(BotInputQueue *inputQueue, char *input) {
+  syslog(LOG_NOTICE, "Pushing message into input queue: msg: %s", input);
+  if (!inputQueue || !input || strlen(input) == 0)
+    return;
+
+  BotQueuedInput *newInput = BotInput_newQueuedInput(input);
+  if (!newInput) {
+    syslog(LOG_CRIT, "Failed to allocate new queued input object: msg: %s", input);
+    return;
+  }
+
+  BotQueuedInput *oldHead = inputQueue->head;
+  inputQueue->head = newInput;
+  newInput->next = oldHead;
+  inputQueue->count++;
+  syslog(LOG_INFO, "%d queued messages", inputQueue->count);
+}
 

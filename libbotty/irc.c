@@ -334,7 +334,7 @@ int bot_parse(BotInfo *bot, char *line) {
   int servStat = 0;
   char sysBuf[MAX_MSG_LEN];
   char *space = NULL, *space_off = NULL;
-  syslog(LOG_INFO, "SERVER: %s", line);
+  syslog(LOG_INFO, "From server: %s", line);
 
   //respond to server pings
   if (!strncmp(line, PING_STR, strlen(PING_STR))) {
@@ -349,16 +349,28 @@ int bot_parse(BotInfo *bot, char *line) {
 
   switch (bot->state) {
   case CONSTATE_NONE:
-    //initialize data here
-    space = strtok_r(line, " ", &space_off);
-    if (space) {
-      //grab new server name if we've been redirected
-      memcpy(bot->info->server, space+1, strlen(space) - 1);
-      syslog(LOG_NOTICE, "redirecting to given server: %s", bot->info->server);
-    }
-    callback_call_r(bot->cb, CALLBACK_CONNECT, (void*)bot, NULL);
     registerBotNick(bot);
-    bot->state = CONSTATE_LISTENING;
+    bot->state = CONSTATE_REGISTERED;
+    break;
+  case CONSTATE_REGISTERED:
+ 		if (line[0] == ':') {
+  		//we are consuming this message to grab server info
+  		//add it back to the input queue so we can process it again
+  		//for the rest of the information
+  		BotInputQueue_pushInput(&bot->inputQueue, line);
+			space = strtok_r(line, " ", &space_off);
+    	if (space) {
+      	//grab new server name if we've been redirected
+      	memcpy(bot->info->server, space+1, strlen(space) - 1);
+      	syslog(LOG_NOTICE, "redirecting to given server: %s", bot->info->server);
+      	callback_call_r(bot->cb, CALLBACK_CONNECT, (void*)bot, NULL);
+      	bot->state = CONSTATE_LISTENING;
+    	}
+		}
+		else {
+			syslog(LOG_DEBUG, "Message does not contain server: msg: %s", line);
+		}
+  	break;
   default:
   case CONSTATE_LISTENING:
     //filter out server messages

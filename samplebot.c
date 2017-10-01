@@ -7,6 +7,8 @@
 #include <time.h>
 
 #include "botapi.h"
+#include "commands/mailbox.h"
+#include "commands/links.h"
 
 /*=====================================================
  * Bot Configuration
@@ -14,7 +16,7 @@
 BotInfo botInfo = {
   .info     = &(IrcInfo) {
     .port     = "6697",
-    .server   = "CHANGEME.net",
+    .server   = "irc.CHANGEME.net",
     .channel  = {"#CHANGEME", "\0", "\0", "\0", "\0"}
   },
   .host     = "CIRCBotHost",
@@ -24,74 +26,7 @@ BotInfo botInfo = {
   .master   = "Derrick",
   .useSSL   = 1
 };
-/*=====================================================
- * Mailbox Structures and Methods
- *===================================================*/
-#define MIN_MAIL_BOXES 13
-/*
- * Each user can have a mailbox with
- * multiple messages stored for them to
- * view later.
- */
-static HashTable *mailBoxes = NULL;
 
-typedef struct Mail {
-  time_t sent;
-  char from[MAX_NICK_LEN];
-  char msg[MAX_MSG_LEN];
-  struct Mail *next;
-} Mail;
-
-typedef struct MailBox {
-  char notified;
-  int count;
-  Mail *messages;
-} MailBox;
-
-char *getNotified(char *nick);
-int numMsgs(char *nick);
-void readMail(BotInfo *bot, char *respTarget, char *nick);
-int saveMail(char *to, char *from, char *message);
-void destroyAllMailBoxes(void);
-
-
-static void mailNotify(BotInfo *bot, char *channel, char *nick) {
-  //mail notification
-  int left = numMsgs(nick);
-  if (left > 0) {
-     char *notStatus = getNotified(nick);
-     if (!notStatus) return;
-     if (!*notStatus) {
-         botty_say(bot, channel, "%s: You have %d unread message(s). Use '~mail' to view them.", nick, left);
-         *notStatus = 1;
-     }
-  }
-}
-/*=====================================================
- * Link History Structures and Methods
- *===================================================*/
-#define LINKS_STORE_MAX 5
-#define URL_IDENTIFIER_HTTP "http:"
-#define URL_IDENTIFIER_HTTPS "https:"
-#define URL_IDENTIFIER_WWW "www."
-
-typedef struct LinkNode {
-  char url[MAX_MSG_LEN];
-  struct LinkNode *next;
-} LinkNode;
-
-typedef struct LinksHead {
-  LinkNode *head;
-  int count;
-  LinkNode *lastPos;
-} LinksHead;
-
-LinksHead ListOfLinks = {};
-
-char *links_msgContainsLink(char *input);
-char links_store(LinksHead *head, char *input);
-int links_print(CmdData *data, char *args[MAX_BOT_ARGS]);
-void links_purge(LinksHead *list);
 
 /*=====================================================
  * Bot Callback functions
@@ -115,7 +50,7 @@ static int onMsg(void *data, IrcMsg *msg) {
 
   syslog(LOG_DEBUG, "Recieved msg from %s in %s: %s", msg->nick, msg->channel, msg->msg);
   mailNotify((BotInfo *)data, msg->channel,  msg->nick);
-  links_store(&ListOfLinks, msg->msg);
+  links_store(msg->msg);
   return 0;
 }
 
@@ -192,14 +127,6 @@ int botcmd_msg(CmdData *data, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
-//mail command to read any inboxed messages
-int botcmd_mail(CmdData *data, char *args[MAX_BOT_ARGS]) {
-  char *responseTarget = botcmd_builtin_getTarget(data);
-  readMail(data->bot, responseTarget, data->msg->nick);
-  int left = numMsgs(data->msg->nick);
-  botty_say(data->bot, responseTarget, "%s: You have %d message(s) remaining.", data->msg->nick, left);
-  return 0;
-}
 
 /*
  * Some fun commands that aren't necessary, but illustrate
@@ -338,7 +265,7 @@ static int _draw(void *b, BotProcessArgs *args) {
   _fin:
   //return negative value to indicate the process
   //is complete
-  fclose(input);
+  _draw_free(args->data);
   return -1;
 }
 
@@ -377,8 +304,6 @@ int botcmd_draw(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
 
 
-
-
 int main(int argc, char *argv[]) {
 
   openlog(argv[0], LOG_PERROR | LOG_CONS | LOG_PID, LOG_USER);
@@ -410,280 +335,23 @@ int main(int argc, char *argv[]) {
   botty_addCommand(&botInfo, "draw", 0, 2, &botcmd_draw);
   botty_addCommand(&botInfo, "links", 0, 1, &links_print);
 
+  //start the bot connection to the irc server
   botty_connect(&botInfo);
 
-  //process input 30 times per second
   struct timespec sleepTimer = {
     .tv_sec = 0,
     .tv_nsec = ONE_SEC_IN_NS/120
   };
+
   while (((status = botty_process(&botInfo)) >= 0)) {
     //prevent 100% cpu usage
     nanosleep(&sleepTimer, NULL);
   }
-  botty_cleanup(&botInfo);
 
+  botty_cleanup(&botInfo);
   destroyAllMailBoxes();
-  links_purge(&ListOfLinks);
+  links_purge();
 
   closelog();
   return status;
-}
-
-/*=====================================================
- * Mailbox implementation
- *
- *  HashTable functions are included in libbotty
- *===================================================*/
-void cleanupMailBox(MailBox *box) {
-  if (!box) return;
-
-  Mail *cur = box->messages, *next = NULL;
-  while (cur) {
-    next = cur->next;
-    free(cur);
-    cur = next;
-  }
-
-  free(box);
-}
-
-static int cleanupHashedBox(HashEntry *entry, void *data) {
-  //cleanup user name and stored messages
-  if (entry->key) free(entry->key);
-  cleanupMailBox((MailBox *)entry->data);
-  return 0;
-}
-
-void destroyAllMailBoxes(void) {
-  HashTable_forEach(mailBoxes, NULL, &cleanupHashedBox);
-  HashTable_destroy(mailBoxes);
-}
-
-int saveMail(char *to, char *from, char *message) {
-  //make sure our mail boxes exist
-  if (!mailBoxes) {
-    mailBoxes = HashTable_init(MIN_MAIL_BOXES);
-    if (!mailBoxes) {
-      syslog(LOG_CRIT, "ERROR ALLOCATING MAILBOXES");
-      return -1;
-    }
-  }
-
-  //make sure the user has an inbox
-  HashEntry *user = HashTable_find(mailBoxes, to);
-  if (!user) {
-    syslog(LOG_NOTICE, "'%s' does not have a box, creating one...", to);
-    MailBox *newBox = calloc(1, sizeof(MailBox));
-    if (!newBox) {
-      syslog(LOG_CRIT, "error allocating message box for user %s", to);
-      return -1;
-    }
-
-    char *nick = calloc(1, strlen(to) + 1);
-    if (!nick) {
-      syslog(LOG_CRIT, "error allocating nick for user's inbox");
-      return -1;
-    }
-    strncpy(nick, to, strlen(to));
-
-    HashEntry *newUser = HashEntry_create(nick, newBox);
-    if (!newUser) {
-      syslog(LOG_CRIT, "Error allocating mailbox for nick: %s", nick);
-      free(nick);
-      cleanupMailBox(newBox);
-      return -1;
-    }
-    syslog(LOG_NOTICE, "Adding '%s' to mailbox hash", nick);
-    if (!HashTable_add(mailBoxes, newUser)) {
-      syslog(LOG_CRIT, "Error adding %s's mail box to the hash", nick);
-      cleanupHashedBox(newUser, NULL);
-      return -1;
-    }
-    syslog(LOG_DEBUG, "Searching hash for '%s''s box", nick);
-    user = HashTable_find(mailBoxes, nick);
-    if (!user) {
-      syslog(LOG_CRIT, "Fatal error, could not retrieve created user (%s)", nick);
-      return -1;
-    }
-    syslog(LOG_DEBUG, "'%s''s box was found", nick);
-  }
-
-  //make the new mail message to store
-  Mail *newMail = calloc(1, sizeof(Mail));
-  if (!newMail) {
-    syslog(LOG_CRIT, "error allocating new mail for nick %s", to);
-    return -1;
-  }
-  time(&newMail->sent);
-  strncpy(newMail->from, from, MAX_NICK_LEN);
-  strncpy(newMail->msg, message, MAX_MSG_LEN);
-
-  //now add the new message to the user's inbox
-  MailBox *inbox = (MailBox *)user->data;
-  if (inbox->messages == NULL) {
-    inbox->count = 1;
-    inbox->messages = newMail;
-  } else {
-    Mail *curMail = inbox->messages;
-    while (curMail->next) curMail = curMail->next;
-    curMail->next = newMail;
-    inbox->messages++;
-  }
-
-  return 0;
-}
-
-char *getNotified(char *nick) {
-  HashEntry *user = HashTable_find(mailBoxes, nick);
-  if (!user) return NULL;
-
-  MailBox *box = (MailBox *)user->data;
-  if (!box) return NULL;
-
-  return &box->notified;
-}
-
-//get the number of messages available for a user
-int numMsgs(char *nick) {
-  if (!mailBoxes) {
-    syslog(LOG_DEBUG, "numMsgs: no global mailbox allocated.");
-    return 0;
-  }
-
-  HashEntry *user = HashTable_find(mailBoxes, nick);
-  if (!user) {
-    syslog(LOG_DEBUG, "numMsgs: no user: '%s'", nick);
-    return 0;
-  }
-
-  MailBox *box = (MailBox *)user->data;
-  if (box->count <= 0 || !box->messages) {
-    syslog(LOG_DEBUG, "numMsgs: %s has no mail", nick);
-    return 0;
-  }
-
-  return box->count;
-}
-
-void readMail(BotInfo *bot, char *respTarget, char *nick) {
-  int msgCount = numMsgs(nick);
-  if (!msgCount) return;
-
-  //if msg count is > 0, then the user exists and has a box with messages
-  HashEntry *user = HashTable_find(mailBoxes, nick);
-  MailBox *box = (MailBox *)user->data;
-  Mail *message = box->messages;
-  box->messages = message->next;
-
-  //get sent time
-  char buff[20];
-  struct tm * timeinfo = localtime (&message->sent);
-  strftime(buff, sizeof(buff), "%b %d @ %H:%M", timeinfo);
-
-  botty_say(bot, respTarget, "%s: [%s <%s>] %s", nick, buff, message->from, message->msg);
-  free(message);
-  box->count--;
-}
-
-/*=====================================================
- * Links implementation
- *
- *===================================================*/
-
-char *links_msgContainsLink(char *input) {
-
-  char *url = strstr(input, URL_IDENTIFIER_HTTP);
-  if (url) return url;
-
-  url = strstr(input, URL_IDENTIFIER_HTTPS);
-  if (url) return url;
-
-  url = strstr(input, URL_IDENTIFIER_WWW);
-  return url;
-}
-
-char links_store(LinksHead *head, char *input) {
-  char *start = links_msgContainsLink(input);
-  if (!head || !start) return 0;
-
-  char *end = start;
-  while (*end != ' ' && *end != '\0' && *end != '\n' && *end != '\r') end++;
-
-  LinkNode *newNode = NULL;
-  if (head->count < LINKS_STORE_MAX) {
-    newNode = calloc(1, sizeof(LinkNode));
-  } else {
-    newNode = head->head;
-    LinkNode *prevNode = newNode;
-    while (newNode->next){
-      prevNode = newNode;
-      newNode = newNode->next;
-    }
-    prevNode->next = NULL;
-  }
-  memset(newNode->url, 0, MAX_MSG_LEN);
-  strncpy(newNode->url, start, (end - start));
-  if (!head->head && head->count == 0) {
-    head->head = newNode;
-    head->count++;
-  } else {
-    newNode->next = head->head;
-    head->head = newNode;
-    head->count += (head->count < LINKS_STORE_MAX);
-  }
-
-  return 0;
-}
-
-int links_print_process(void *b, BotProcessArgs *args) {
-  BotInfo *bot = (BotInfo *)b;
-  LinksHead *listData = (LinksHead *)args->data;
-  char *responseTarget = args->target;
-
-  if (!listData->lastPos)
-    goto _fin;
-
-  if (botty_say(bot, responseTarget, ". %s", listData->lastPos->url) < 0)
-    goto _fin;
-
-  listData->lastPos = listData->lastPos->next;
-  //return 1 to keep the process going
-  return 1;
-
-  _fin:
-  return -1;
-}
-
-int links_print(CmdData *data, char *args[MAX_BOT_ARGS]) {
-  char *caller = data->msg->nick;
-  char *responseTarget = botty_respondDest(data);
-  char *script = "links";
-
-  if (ListOfLinks.count == 0) {
-    botty_say(data->bot, responseTarget, "%s: There is no link history to post.", caller);
-    return 0;
-  }
-
-  BotProcessArgs *sArgs = botty_makeProcessArgs((void*)&ListOfLinks, responseTarget, NULL);
-  if (!sArgs) {
-    botty_say(data->bot, responseTarget, "There was an error allocating memory to execute command: %s", script);
-    return 0;
-  }
-
-  ListOfLinks.lastPos = ListOfLinks.head;
-  botty_say(data->bot, responseTarget, "Printing the last %d available chat link(s) in history.", ListOfLinks.count);
-  botty_runProcess(data->bot, &links_print_process, sArgs, script, caller);
-  return 0;
-}
-
-void links_purge(LinksHead *list) {
-  if (!list || !list->head) return;
-  LinkNode *current = list->head;
-  while (current->next) {
-    LinkNode *next = current->next;
-    free(current);
-    current = next;
-  }
-  memset(list, 0, sizeof(LinksHead));
 }

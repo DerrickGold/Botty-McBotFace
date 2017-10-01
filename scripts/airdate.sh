@@ -22,6 +22,11 @@ fi
 
 url="http://epguides.com/$show/"
 episodesList=$(curl "$url" 2> /dev/null | grep -E "$EPISODE_REGEX +$DATE_REGEX.*")
+if [ -z "$episodesList" ]; then
+    echo "$caller: Could not find episode guide for '$2'"
+    exit 0
+fi
+
 lastEpisode=$(echo "$episodesList" | tail -n 1)
 
 epNum="S"$(echo "$lastEpisode" | grep -Eo "$EPISODE_REGEX" | sed 's/-/-E/')

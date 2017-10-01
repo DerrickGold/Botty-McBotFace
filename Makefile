@@ -9,11 +9,16 @@ BOTTYDIR=libbotty
 CFLAGS+=-I $(BOTTYDIR)
 LDLIBS+= $(BOTTYDIR)/botty.a
 
+CMDDIR=commands
+CFLAGS+=-I $(CMDDIR)
+
 .PHONY: all clean
 
 all: samplebot
 
-samplebot: samplebot.o
+samplebot: samplebot.o commands/mailbox.o commands/links.o
+mailbox.o: commands/mailbox.c commands/mailbox.h
+links.o: commands/links.c commands/links.h
 
 clean:
-	$(RM) *.o samplebot multibot
+	$(RM) *.o samplebot multibot $(CMDDIR)/*.o

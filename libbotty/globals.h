@@ -55,6 +55,10 @@
 #define MAX_CMD_LEN 9
 #define MAX_BOT_ARGS 8
 #define MAX_PARAMETERS 15
+#define MAX_PORT_LEN 6
+#define MAX_HOST_LEN 256
+#define MAX_IDENT_LEN 10
+#define MAX_REALNAME_LEN 64
 
 #define REG_SUC_CODE "001"
 #define POST_REG_MSG1 "002"

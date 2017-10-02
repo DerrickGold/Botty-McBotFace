@@ -21,7 +21,7 @@ typedef struct NickList {
 } NickList;
 
 typedef struct IrcInfo {
-  char port[6];
+  char port[MAX_PORT_LEN];
   char server[MAX_SERV_LEN];
   char channel[MAX_CONNECTED_CHANS][MAX_CHAN_LEN];
 } IrcInfo;
@@ -30,11 +30,11 @@ typedef struct BotInfo {
   //user config values
   int id;
   IrcInfo *info;
-  char host[256];
+  char host[MAX_HOST_LEN];
   char nick[NICK_ATTEMPTS][MAX_NICK_LEN];
-  char ident[10];
-  char realname[64];
-  char master[30];
+  char ident[MAX_IDENT_LEN];
+  char realname[MAX_REALNAME_LEN];
+  char master[MAX_NICK_LEN];
   char useSSL;
   char joined;
 

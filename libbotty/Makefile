@@ -4,13 +4,16 @@ LDFLAGS=-L/usr/local/opt/openssl/lib -lcrypto -lssl
 CFLAGS=-Wall -g -std=gnu99 -I/usr/local/opt/openssl/include -DUSE_OPENSSL
 LDLIBS=-lm
 
+JSMNDIR=jsmn
+CFLAGS+=-I $(JSMNDIR)
+
 .PHONY: all clean
 
 all: botty.a
 
 #the botty library
 botty.a: ircmsg.o commands.o callback.o hash.o irc.o builtin.o botapi.o connection.o botmsgqueues.o \
-	botprocqueue.o botinputqueue.o
+	botprocqueue.o botinputqueue.o config.o
 	ar rcs $@ $^
 
 commands.o: commands.c commands.h globals.h hash.h ircmsg.h cmddata.h
@@ -25,5 +28,7 @@ botapi.o: botapi.c botapi.h globals.h hash.h callback.h ircmsg.h commands.h irc.
 botmsgqueues.o: botmsgqueues.c botmsgqueues.h hash.h connection.h globals.h
 botprocqueue.o: botprocqueue.c botprocqueue.h globals.h
 botinputqueue.o: botinputqueue.c botinputqueue.h globals.h
+config.o: config.c irc.h
+
 clean:
 	$(RM) *.o *.a

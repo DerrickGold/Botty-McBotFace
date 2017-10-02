@@ -10,6 +10,7 @@
 #include "builtin.h"
 #include "botprocqueue.h"
 #include "commands.h"
+#include "config.h"
 
 int botty_init(BotInfo *bot, int argc, char *argv[], int argstart);
 

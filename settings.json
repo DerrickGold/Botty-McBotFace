@@ -1,0 +1,10 @@
+{
+  "port": "6697",
+  "server": "irc.CHANGEME.net",
+  "channel": ["#CHANGEME", "", "", "", "", ""],
+  "host":  "CIRCBotHost",
+  "nick":  ["DiceBot", "DrawBot", "CIrcBot3"],
+  "ident": "CIrcBot",
+  "realname": "Botty McBotFace",
+  "master": "Derrick",
+}

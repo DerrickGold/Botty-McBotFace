@@ -14,16 +14,7 @@
  * Bot Configuration
  *===================================================*/
 BotInfo botInfo = {
-  .info     = &(IrcInfo) {
-    .port     = "6697",
-    .server   = "irc.CHANGEME.net",
-    .channel  = {"#CHANGEME", "\0", "\0", "\0", "\0"}
-  },
-  .host     = "CIRCBotHost",
-  .nick     = {"DiceBot", "DrawBot", "CIrcBot3"},
-  .ident    = "CIrcBot",
-  .realname = "Botty McBotFace",
-  .master   = "Derrick",
+  .info     = &(IrcInfo) {},
   .useSSL   = 1
 };
 
@@ -307,6 +298,10 @@ int botcmd_draw(CmdData *data, char *args[MAX_BOT_ARGS]) {
 int main(int argc, char *argv[]) {
 
   openlog(argv[0], LOG_PERROR | LOG_CONS | LOG_PID, LOG_USER);
+
+  //syslog(LOG_INFO, "Testing json: %d", test_json());
+  syslog(LOG_INFO, "Loading Config: %d", botty_loadConfig(&botInfo, "./settings.json"));
+
   int status = 0;
   time_t t;
   srand((unsigned) time(&t));

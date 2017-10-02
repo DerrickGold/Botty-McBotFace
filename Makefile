@@ -9,6 +9,10 @@ BOTTYDIR=libbotty
 CFLAGS+=-I $(BOTTYDIR)
 LDLIBS+= $(BOTTYDIR)/botty.a
 
+JSMNDIR=jsmn
+CFLAGS+=-I $(BOTTYDIR)/$(JSMNDIR)
+LDLIBS+= $(BOTTYDIR)/$(JSMNDIR)/libjsmn.a
+
 CMDDIR=commands
 CFLAGS+=-I $(CMDDIR)
 

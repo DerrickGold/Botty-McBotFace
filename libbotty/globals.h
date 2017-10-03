@@ -14,6 +14,8 @@
 #define MSG_LEN_EXCEED \
   "Message length exceeds %d byte limit. Message splitting not supported yet\n"
 
+#define DEFAULT_CONFIG_FILE "settings.json"
+
 #define ILLEGAL_NICK_CHARS "-&@+%"
 #define CHANNEL_START_CHAR '#'
 #define SERVER_PREFIX "irc."
@@ -46,6 +48,7 @@
 //before giving up registering to the server
 #define NICK_ATTEMPTS 3
 
+#define MAX_FILEPATH_LEN 4096
 #define MAX_CONNECTED_CHANS 5
 #define MAX_MSG_LEN 512
 #define MAX_MSG_SPLITS 4

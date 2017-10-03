@@ -71,9 +71,11 @@ static char *getConfigBuffer(char *configPath, size_t *datalen) {
 		return NULL;
 	}
 
-	fread(jsonBuffer, 1, *datalen, f);
-	if (errno) {
-		syslog(LOG_CRIT, "botty_loadConfig: Error reading config file: %s", strerror(errno));
+	size_t bytesRead = fread(jsonBuffer, 1, *datalen, f);
+	if (*datalen != bytesRead) {
+		syslog(LOG_CRIT, "botty_loadConfig: Error reading config file: expected %zu bytes, read %zu", *datalen, bytesRead);
+		fclose(f);
+		free(jsonBuffer);
 		return NULL;
 	}
 	fclose(f);
@@ -140,7 +142,7 @@ int botty_loadConfig(BotInfo *bot, char *configPath) {
 				if (chan < chanCount) {
 					jsmntok_t *channel = getArrayEntry(jsonTok, chan);
 					json_getstr(channel, jsonBuffer, bot->info->channel[chan], MAX_CHAN_LEN);
-					syslog(LOG_CRIT, "botty_loadConfig: CHANNEL: %s", bot->info->channel[chan]);
+					syslog(LOG_INFO, "botty_loadConfig: CHANNEL: %s", bot->info->channel[chan]);
 				}
 				else
 					snprintf(bot->info->channel[chan], MAX_CHAN_LEN, "");
@@ -164,7 +166,7 @@ int botty_loadConfig(BotInfo *bot, char *configPath) {
 			for (int n = 0; n < nickCount && n < NICK_ATTEMPTS; n++) {
 				jsmntok_t *nickEntry = getArrayEntry(jsonTok, n);
 				json_getstr(nickEntry, jsonBuffer, bot->nick[n], MAX_CHAN_LEN);
-				syslog(LOG_CRIT, "botty_loadConfig: NICK[%d]: %s", n, bot->nick[n]);
+				syslog(LOG_INFO, "botty_loadConfig: NICK[%d]: %s", n, bot->nick[n]);
 			}
 			i += nickCount + 1;
 		}

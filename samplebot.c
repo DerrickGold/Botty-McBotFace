@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <libgen.h>
 
 #include "botapi.h"
 #include "commands/mailbox.h"
@@ -295,12 +296,29 @@ int botcmd_draw(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
 
 
+
 int main(int argc, char *argv[]) {
+  char configPath[MAX_FILEPATH_LEN];
+  char *cfgPtr = configPath;
 
   openlog(argv[0], LOG_PERROR | LOG_CONS | LOG_PID, LOG_USER);
 
-  //syslog(LOG_INFO, "Testing json: %d", test_json());
-  syslog(LOG_INFO, "Loading Config: %d", botty_loadConfig(&botInfo, "./settings.json"));
+  if (argc < 2) {
+    realpath(argv[0], configPath);
+    char *config = dirname(configPath);
+    snprintf(configPath, MAX_FILEPATH_LEN - 1, "%s/%s", config, DEFAULT_CONFIG_FILE);
+    syslog(LOG_NOTICE, "Loading default config file: %s", cfgPtr);
+  }
+  else {
+    cfgPtr = argv[1];
+    syslog(LOG_NOTICE, "Loading user specified config: %s", cfgPtr);
+  }
+
+  if (botty_loadConfig(&botInfo, cfgPtr)) {
+    syslog(LOG_CRIT, "Error loading config file: %s", cfgPtr);
+    return -1;
+  }
+
 
   int status = 0;
   time_t t;

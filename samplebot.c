@@ -232,7 +232,7 @@ static int _draw_free(void *a) {
 }
 
 //A sample 'process' function that can be given to the bot
-static int _draw(void *b, BotProcessArgs *args) {
+static int _draw(void *b, char *procOwner, BotProcessArgs *args) {
   BotInfo *bot = (BotInfo *)b;
   FILE *input = (FILE *)args->data;
   char *responseTarget = args->target;
@@ -294,6 +294,15 @@ int botcmd_draw(CmdData *data, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+int test_notice(CmdData *data, char *args[MAX_BOT_ARGS]) {
+  char *caller = data->msg->nick;
+  char *responseTarget = caller;
+  char *msg = args[1];
+
+  botty_send(data->bot, responseTarget, NOTICE_ACTION, NULL, "%s", msg);
+  return 0;
+}
+
 
 
 
@@ -347,18 +356,17 @@ int main(int argc, char *argv[]) {
   botty_addCommand(&botInfo, "mail", 0, 1, &botcmd_mail);
   botty_addCommand(&botInfo, "draw", 0, 2, &botcmd_draw);
   botty_addCommand(&botInfo, "links", 0, 1, &links_print);
+  botty_addCommand(&botInfo, "whisper", 0, 2, &test_notice);
 
   //start the bot connection to the irc server
   botty_connect(&botInfo);
 
-  struct timespec sleepTimer = {
-    .tv_sec = 0,
-    .tv_nsec = ONE_SEC_IN_NS/120
-  };
-
   while (((status = botty_process(&botInfo)) >= 0)) {
     //prevent 100% cpu usage
-    nanosleep(&sleepTimer, NULL);
+    nanosleep(&(struct timespec) {
+      .tv_sec = 0,
+      .tv_nsec = ONE_SEC_IN_NS/120
+    }, NULL);
   }
 
   botty_cleanup(&botInfo);

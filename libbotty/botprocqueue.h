@@ -11,7 +11,7 @@ typedef struct BotProcessArgs {
   BotProcessArgsFreeFn free;
 } BotProcessArgs;
 
-typedef int (*BotProcessFn)(void *, BotProcessArgs *);
+typedef int (*BotProcessFn)(void *, char *, BotProcessArgs *);
 
 typedef struct BotProcess {
   BotProcessFn fn;
@@ -20,6 +20,7 @@ typedef struct BotProcess {
   char terminate;
   struct BotProcess *next;
   unsigned int pid;
+  char owner[MAX_NICK_LEN];
   char details[MAX_MSG_LEN];
 } BotProcess;
 

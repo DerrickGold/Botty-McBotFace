@@ -49,7 +49,7 @@ char links_store(char *input) {
   return 0;
 }
 
-int links_print_process(void *b, BotProcessArgs *args) {
+int links_print_process(void *b, char *procOwner, BotProcessArgs *args) {
   BotInfo *bot = (BotInfo *)b;
   LinksHead *listData = (LinksHead *)args->data;
   char *responseTarget = args->target;

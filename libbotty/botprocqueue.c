@@ -59,8 +59,9 @@ unsigned int BotProcess_queueProcess(BotProcessQueue *procQueue, BotProcessFn fn
   if (procQueue->pidTicker == 0)
     process->pid = (++procQueue->pidTicker);
 
+  strncpy(process->owner, caller, MAX_NICK_LEN - 1);
   snprintf(process->details, MAX_MSG_LEN, "PID: %d: %s - %s", process->pid, cmd, caller);
-  syslog(LOG_DEBUG, "bot_queueProcess: Added new process to queue:\n %s", process->details);
+  syslog(LOG_DEBUG, "bot_queueProcess: %s Added new process to queue:\n %s", process->owner, process->details);
   return process->pid;
 }
 
@@ -114,7 +115,7 @@ unsigned int BotProcess_updateProcessQueue(BotProcessQueue *procQueue, void *bot
   BotProcess *proc = procQueue->current;
   if (proc && proc->fn) {
     procQueue->curPid = procQueue->current->pid;
-    if (proc->terminate || (proc->busy = proc->fn(botInfo, proc->arg)) < 0)
+    if (proc->terminate || (proc->busy = proc->fn(botInfo, proc->owner, proc->arg)) < 0)
       terminatedPid = BotProcess_dequeueProcess(procQueue, proc);
     else
       procQueue->current = proc->next;

@@ -20,6 +20,7 @@ typedef struct ScriptPtr {
   FILE *fh;
   int fd;
   char notify;
+  char privmsg;
 } ScriptPtr;
 
 typedef struct ClearQueueContainer{
@@ -92,7 +93,7 @@ static int _freeScriptArgs(void *args) {
 }
 
 //A sample 'process' function that can be given to the bot
-static int _script(void *b, BotProcessArgs *sArgs) {
+static int _script(void *b, char *procOwner, BotProcessArgs *sArgs) {
   BotInfo *bot = (BotInfo *)b;
   ScriptPtr *fptr= (ScriptPtr *)sArgs->data;
   char *responseTarget = sArgs->target;
@@ -109,7 +110,14 @@ static int _script(void *b, BotProcessArgs *sArgs) {
     while (start) {
       if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
         fptr->notify = (fptr->notify + 1) % 2;
-      } else {
+      }
+      else if (!strncmp(start, SCRIPT_OUTPUT_REDIRECT_TOKEN, MAX_MSG_LEN)) {
+      	fptr->privmsg = (fptr->privmsg + 1) % 2;
+      }
+      else {
+      	if (fptr->privmsg)
+      		responseTarget = procOwner;
+
         if (fptr->notify) {
           if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
             goto _fin;
@@ -185,7 +193,7 @@ int botcmd_builtin_script(CmdData *data, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
-static int _listProcesses(void *b, BotProcessArgs *pArgs) {
+static int _listProcesses(void *b, char *procOwner, BotProcessArgs *pArgs) {
   BotInfo *bot = (BotInfo *)b;
   BotProcess *proc = (BotProcess *)pArgs->data;
   char *responseTarget = pArgs->target;

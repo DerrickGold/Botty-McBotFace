@@ -30,22 +30,17 @@ typedef struct CmdAlias {
 
 typedef int (*CommandFn)(CmdData *, char *a[MAX_BOT_ARGS]);
 
+int commands_init(HashTable **commands);
 int command_reg(HashTable *cmdTable, char *cmdtag, int flags, int args, CommandFn fn);
-
 BotCmd *command_get(HashTable *cmdTable, char *command);
-
 int command_call_r(BotCmd *cmd, CmdData *data, char *args[MAX_BOT_ARGS]);
-
 int command_call(HashTable *cmdTable, char *command, CmdData *data, char *args[MAX_BOT_ARGS]);
+void command_cleanup(HashTable **cmdTable);
 
-void command_cleanup(HashTable *cmdTable);
-
+int command_alias_init(HashTable **cmdaliases);
 int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, char *cmd);
-
 CmdAlias *command_alias_get(HashTable *cmdAliases, char *alias);
-
 void command_alias_free(HashEntry *entry);
-
 BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAliases);
 
 #endif //__COMMANDS_H__

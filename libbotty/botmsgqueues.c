@@ -12,6 +12,23 @@ static void initMsgQueue(BotSendMessageQueue *queue) {
   queue->nextSendTimeMS = botty_currentTimestamp();
 }
 
+
+int BotMsgQueue_init(HashTable **msgQueue) {
+  if (!msgQueue) {
+    syslog(LOG_CRIT, "%s: Null hashtable pointer provided.", __FUNCTION__);
+    return -1;
+  }
+
+  *msgQueue = HashTable_init(COMMAND_HASH_SIZE);
+  if (!*msgQueue) {
+    syslog(LOG_CRIT, "%s: Error allocating msgQueue hash for bot", __FUNCTION__);
+    return -1;
+  }
+
+  return 0;
+}
+
+
 BotQueuedMessage *BotQueuedMsg_newMsg(char *msg, char *responseTarget, size_t len, unsigned int createdByPid) {
   BotQueuedMessage *newMsg = calloc(1, sizeof(BotQueuedMessage));
   if (!newMsg) {
@@ -203,8 +220,9 @@ int BotMsgQueue_rmPidMsg(HashTable *msgQueues, char *target, unsigned int pid) {
   return removed;
 }
 
-void BotMsgQueue_cleanQueues(HashTable *msgQueues) {
-  HashTable_forEach(msgQueues, NULL, &cleanQueue);
-  HashTable_destroy(msgQueues);
+void BotMsgQueue_cleanQueues(HashTable **msgQueues) {
+  HashTable_forEach(*msgQueues, NULL, &cleanQueue);
+  HashTable_destroy(*msgQueues);
+  *msgQueues = NULL;
 }
 

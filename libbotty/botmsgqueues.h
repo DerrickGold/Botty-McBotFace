@@ -30,11 +30,12 @@ typedef struct BotSendMessageQueue {
   int throttled, lastThrottled;
 } BotSendMessageQueue;
 
+int BotMsgQueue_init(HashTable **msgQueue);
 BotQueuedMessage *BotQueuedMsg_newMsg(char *msg, char *responseTarget, size_t len, unsigned int createdByPid);
 void BotMsgQueue_enqueueTargetMsg(HashTable *msgQueues, char *target, BotQueuedMessage *msg);
 void BotMsgQueue_processQueue(SSLConInfo *conInfo, BotSendMessageQueue *queue);
 void BotMsgQueue_setThrottle(HashTable *msgQueues, char *target);
-void BotMsgQueue_cleanQueues(HashTable *msgQueues);
+void BotMsgQueue_cleanQueues(HashTable **msgQueues);
 int BotMsgQueue_rmPidMsg(HashTable *msgQueues, char *target, unsigned int pid);
 
 #endif //__LIBBOTTY_IRC_MSGQUEUE_H__

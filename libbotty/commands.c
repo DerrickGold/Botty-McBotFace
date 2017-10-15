@@ -6,6 +6,23 @@
 #include "commands.h"
 #include "ircmsg.h"
 
+#define CMD_NAME_POS 0
+
+int commands_init(HashTable **commands) {
+	if (!commands) {
+		syslog(LOG_CRIT, "%s: Null hashtable pointer provided.", __FUNCTION__);
+		return -1;
+	}
+
+  *commands = HashTable_init(COMMAND_HASH_SIZE);
+  if (!*commands) {
+    syslog(LOG_CRIT, "%s: Error allocating command hash for bot", __FUNCTION__);
+    return -1;
+  }
+
+  return 0;
+}
+
 /*
  * Register a command for the bot to use
  */
@@ -44,7 +61,7 @@ BotCmd *command_get(HashTable *cmdTable, char *command) {
 }
 
 int command_call_r(BotCmd *cmd, CmdData *data, char *args[MAX_BOT_ARGS]) {
-if (!cmd) {
+	if (!cmd) {
     syslog(LOG_WARNING, "Command (%s) is not a registered command", cmd->cmd);
     return -1;
   }
@@ -64,11 +81,28 @@ static int cleanCmd(HashEntry *entry, void *data) {
   return 0;
 }
 
-void command_cleanup(HashTable *cmdTable) {
-  HashTable_forEach(cmdTable, NULL, &cleanCmd);
-  HashTable_destroy(cmdTable);
+void command_cleanup(HashTable **cmdTable) {
+  HashTable_forEach(*cmdTable, NULL, &cleanCmd);
+  HashTable_destroy(*cmdTable);
+  *cmdTable = NULL;
 }
 
+
+
+int command_alias_init(HashTable **cmdaliases) {
+	if (!cmdaliases) {
+		syslog(LOG_CRIT, "%s: Null hashtable pointer provided.", __FUNCTION__);
+		return -1;
+	}
+
+  *cmdaliases = HashTable_init(COMMAND_HASH_SIZE);
+  if (!*cmdaliases) {
+    syslog(LOG_CRIT, "%s: Error allocating cmdaliases hash for bot", __FUNCTION__);
+    return -1;
+  }
+
+  return 0;
+}
 
 void command_alias_freeAlias(CmdAlias *alias) {
   free(alias->replaceWith);
@@ -193,11 +227,11 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
     if (tok_off && i < argCount - 1) *tok_off = '\0';
     msg->msgTok[i] = tok;
 
-    if (i == 0) {
-      cmd = command_get(cmdTable, msg->msgTok[0]);
+    if (i == CMD_NAME_POS) {
+      cmd = command_get(cmdTable, msg->msgTok[CMD_NAME_POS]);
       if (cmd)  argCount = cmd->args;
       else {
-        if ((alias= command_alias_get(cmdAliases, msg->msgTok[0]))) {
+        if ((alias= command_alias_get(cmdAliases, msg->msgTok[CMD_NAME_POS]))) {
           cmd = alias->cmd;
           argCount = alias->cmd->args;
           for (i = 0; i < alias->argc; i++)

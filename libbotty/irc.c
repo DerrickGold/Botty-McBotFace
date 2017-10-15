@@ -13,6 +13,7 @@
 #include "connection.h"
 #include "cmddata.h"
 #include "botmsgqueues.h"
+#include "whitelist.h"
 
 #define QUEUE_SEND_MSG 1
 
@@ -454,32 +455,20 @@ void bot_irc_cleanup(void) {
 int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
   if (!bot) return -1;
 
-  bot->commands = HashTable_init(COMMAND_HASH_SIZE);
-  if (!bot->commands) {
-    syslog(LOG_CRIT, "bot_init: Error allocating command hash for bot");
-    return -1;
-  }
+  if(commands_init(&bot->commands)) return -1;
+
   //initialize the built in commands
   botcmd_builtin(bot);
 
-  bot->msgQueues = HashTable_init(QUEUE_HASH_SIZE);
-  if (!bot->msgQueues) {
-    syslog(LOG_CRIT, "bot_init: Error initializing Bot Message Queue hash");
-    return -1;
-  }
-
-  bot->cmdAliases = HashTable_init(ALIAS_HASH_SIZE);
-  if (!bot->cmdAliases) {
-    syslog(LOG_CRIT, "bot_init: Error initialize bot cmd alias hash");
-    return -1;
-  }
+  if (BotMsgQueue_init(&bot->msgQueues)) return -1;
+  if (command_alias_init(&bot->cmdAliases)) return -1;
 
   bot->chanNickLists = HashTable_init(CHANNICKS_HASH_SIZE);
   if (!bot->chanNickLists) {
   	syslog(LOG_CRIT, "bot_init: Error initializing hash table for channel nick lists");
   	return -1;
   }
-
+  if (whitelist_init(&bot->botPermissions)) return -1;
   BotInputQueue_initQueue(&bot->inputQueue);
   return 0;
 }
@@ -510,14 +499,11 @@ void bot_cleanup(BotInfo *bot) {
   if (!bot) return;
 
   BotProcess_freeProcesaQueue(&bot->procQueue);
-
   bot_purgeNames(bot);
-  if (bot->commands) command_cleanup(bot->commands);
-  bot->commands = NULL;
-  if (bot->msgQueues) BotMsgQueue_cleanQueues(bot->msgQueues);
-  bot->msgQueues = NULL;
-
+  command_cleanup(&bot->commands);
+  BotMsgQueue_cleanQueues(&bot->msgQueues);
   BotInputQueue_clearQueue(&bot->inputQueue);
+  whitelist_cleanup(&bot->botPermissions);
 
   close(bot->conInfo.servfds.fd);
   freeaddrinfo(bot->conInfo.res);
@@ -688,7 +674,6 @@ static int clearHashedNickList(HashEntry *entry, void *data) {
 }
 
 void bot_purgeNames(BotInfo *bot) {
-
 	HashTable_forEach(bot->chanNickLists, NULL, clearHashedNickList);
 	HashTable_destroy(bot->chanNickLists);
 	bot->chanNickLists = NULL;

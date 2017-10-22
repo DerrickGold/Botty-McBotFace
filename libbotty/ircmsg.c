@@ -50,7 +50,6 @@ IrcMsg *ircMsg_irc_new(char *input) {
   IrcMsg *msg = ircMsg_newMsg();
   char *end = input + strlen(input);
   char *tok = NULL, *tok_off = NULL;
-  int i = 0;
 
   if (!(tok = get_nick(msg, input, &tok_off))) return msg;
   if (!(tok = get_hostname(msg, input, &tok_off))) return msg;

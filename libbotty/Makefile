@@ -23,7 +23,7 @@ connection.o: connection.c connection.h
 irc.o: irc.c irc.h ircmsg.h commands.h callback.h connection.h hash.h globals.h cmddata.h builtin.h \
 	botmsgqueues.h botprocqueue.h botinputqueue.h whitelist.h
 hash.o: hash.c hash.h
-builtin.o: builtin.c builtin.h globals.h hash.h irc.h cmddata.h botprocqueue.h botmsgqueues.h
+builtin.o: builtin.c builtin.h globals.h hash.h irc.h cmddata.h botprocqueue.h botmsgqueues.h botinputqueue.h
 botapi.o: botapi.c botapi.h globals.h hash.h callback.h ircmsg.h commands.h irc.h cmddata.h connection.h
 botmsgqueues.o: botmsgqueues.c botmsgqueues.h hash.h connection.h globals.h
 botprocqueue.o: botprocqueue.c botprocqueue.h globals.h

@@ -5,6 +5,8 @@
 #include <time.h>
 #include "hash.h"
 
+#define ALIAS_FILE_PATH "aliases.txt"
+
 #define INFO_MSG \
   "Created by Derrick Gold. Compiled at "__TIME__", "__DATE__
 
@@ -25,17 +27,19 @@
 #define BOT_ARG_DELIM ' '
 #define SERVER_INFO_DELIM " "
 #define ARG_DELIM_LEN 1
+#define NEWLINE_CHR '\n'
+#define STREND_CHR '\0'
 #define MSG_FOOTER "\r\n"
 #define CTCP_MARKER "\x01"
 #define ACTION_MSG "PRIVMSG"
 #define ACTION_EMPTY ""
 #define POLL_TIMEOUT_MS 100
-#define REGISTER_TIMEOUT_SEC 20
 #define SCRIPTS_DIR "scripts/"
 #define SCRIPT_OUTPUT_REDIRECT " 2>&1 &"
 #define SCRIPT_OUTPUT_MODE_TOKEN "#__NOTIFY_ALL__#"
 #define SCRIPT_OUTPUT_REDIRECT_TOKEN "#__PRIVATE_MSG__#"
 #define SCRIPT_OUTPIT_DELIM "\n\r\0"
+#define INPUT_SPOOFED_HOSTNAME "SpoofedInput"
 
 #define ONE_SEC_IN_NS 999999999
 #define ONE_SEC_IN_US 1000000

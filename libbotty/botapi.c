@@ -1,14 +1,27 @@
 #include <stdio.h>
+#include <libgen.h>
 #include "botapi.h"
 #include "commands.h"
+
 static int ircRefCount = 0;
+static char runDirectory[MAX_FILEPATH_LEN];
+
 
 //initialize the bot using data set in *bot
 int botty_init(BotInfo *bot, int argc, char *argv[], int argstart) {
+
+  realpath(argv[0], runDirectory);
+  char *pathDir = dirname(runDirectory);
+  snprintf(runDirectory, MAX_FILEPATH_LEN - 1, "%s", pathDir);
+
   //keep track of irc singleton references are used, so that when
   //we are freeing bottys, we can clear up the shared irc data.
   ircRefCount += (bot_irc_init() == 0);
   return bot_init(bot, argc, argv, argstart);
+}
+
+char *botty_getDirectory(void) {
+  return runDirectory;
 }
 
 

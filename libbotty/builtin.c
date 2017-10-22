@@ -4,7 +4,6 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -14,7 +13,10 @@
 #include "botapi.h"
 #include "botprocqueue.h"
 #include "botmsgqueues.h"
+#include "botinputqueue.h"
 
+#define ALIAS_CMD_WORD "alias"
+#define ALIAS_CMD_LIST "lsalias"
 
 typedef struct ScriptPtr {
   FILE *fh;
@@ -85,6 +87,11 @@ static int botcmd_builtin_die(CmdData *data, char *args[MAX_BOT_ARGS]) {
 }
 
 
+/*=============================================================================
+
+Start Scripts, view running scripts, and kill scripts
+
+=============================================================================*/
 static int _freeScriptArgs(void *args) {
   ScriptPtr *scriptFile = (ScriptPtr *)args;
   pclose(scriptFile->fh);
@@ -115,8 +122,7 @@ static int _script(void *b, char *procOwner, BotProcessArgs *sArgs) {
       	fptr->privmsg = (fptr->privmsg + 1) % 2;
       }
       else {
-      	if (fptr->privmsg)
-      		responseTarget = procOwner;
+      	responseTarget = fptr->privmsg ? procOwner : sArgs->target;
 
         if (fptr->notify) {
           if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
@@ -274,17 +280,9 @@ int botcmd_builtin_killProcess(CmdData *data, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+static char *_stringifyAliasArgs(CmdAlias *aliasEntry) {
 
-static void _printAlias(CmdData *data, CmdAlias *aliasEntry, char *alias) {
-  char *caller = data->msg->nick;
-  char *responseTarget = botcmd_builtin_getTarget(data);
-
-  if (!aliasEntry) {
-    botty_say(data->bot, responseTarget, "%s: Nothing is aliased to '%s'.", alias);
-    return;
-  }
-
-  char argList[MAX_MSG_LEN];
+	static char argList[MAX_MSG_LEN];
   memset(argList, 0, MAX_MSG_LEN - 1);
   size_t offset = 0;
 
@@ -294,7 +292,111 @@ static void _printAlias(CmdData *data, CmdAlias *aliasEntry, char *alias) {
   char *lastSpace = strrchr(argList, ' ');
   if (lastSpace) *lastSpace = '\0';
 
+  return argList;
+}
+
+/*=============================================================================
+
+Alias Commands
+
+=============================================================================*/
+char *_getAliasFilePath(void) {
+	static char aliasFilePath[MAX_FILEPATH_LEN];
+	char *baseDir = botty_getDirectory();
+	snprintf(aliasFilePath, MAX_FILEPATH_LEN - 1, "%s/%s", baseDir, ALIAS_FILE_PATH);
+	return aliasFilePath;
+}
+
+char _aliasExistsInFile(char *alias) {
+	char found = 0;
+	char aliasKey[MAX_MSG_LEN];
+	snprintf(aliasKey, MAX_MSG_LEN - 1, "%s ", alias);
+
+	FILE *fp = fopen(_getAliasFilePath(), "r");
+	if (!fp) {
+		syslog(LOG_ERR, "%s: Error opening: %s", __FUNCTION__, strerror(errno));
+		return found;
+	}
+
+	char lineBuf[MAX_MSG_LEN];
+	while (!feof(fp) && !found) {
+		char *temp = fgets(lineBuf, MAX_MSG_LEN, fp);
+		if (!temp) break;
+		found = !strncmp(aliasKey, temp, strlen(aliasKey));
+	}
+	fclose(fp);
+
+	return found;
+}
+
+
+static void _printAlias(CmdData *data, CmdAlias *aliasEntry, char *alias) {
+  char *caller = data->msg->nick;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+
+  if (!aliasEntry) {
+    botty_say(data->bot, responseTarget, "%s: Nothing is aliased to '%s'.", alias);
+    return;
+  }
+  char *argList = _stringifyAliasArgs(aliasEntry);
   botty_say(data->bot, responseTarget, "%s: '%s' ->'%s'", caller, alias, argList);
+}
+
+static void _saveAlias(char *alias, CmdAlias *aliasEntry) {
+	//generate spoofed input to save to file for loading later
+	char *argsList = _stringifyAliasArgs(aliasEntry);
+	syslog(LOG_INFO, "Saving alias %s -> %s to %s", alias, argsList, ALIAS_FILE_PATH);
+
+	if (_aliasExistsInFile(alias)) {
+		syslog(LOG_INFO, "Alias '%s' already exists in file.", alias);
+		return;
+	}
+
+	FILE *af = fopen(_getAliasFilePath(), "a");
+	if (!af) {
+		syslog(LOG_ERR, "%s: Error opening: %s", __FUNCTION__, strerror(errno));
+		return;
+	}
+
+	fprintf(af, "%s %s\n", alias, argsList);
+	fclose(af);
+	syslog(LOG_INFO, "Successfully saved alias: %s", alias);
+}
+
+int botcmd_builtin_loadAliases(CmdData *data, char *args[MAX_BOT_ARGS]) {
+	char *caller = data->msg->nick;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+
+	syslog(LOG_INFO, "Loading aliases from %s", ALIAS_FILE_PATH);
+
+	char *baseDir = botty_getDirectory();
+	char aliasFilePath[MAX_FILEPATH_LEN];
+	snprintf(aliasFilePath, MAX_FILEPATH_LEN - 1, "%s/%s", baseDir, ALIAS_FILE_PATH);
+
+	FILE *af = fopen(aliasFilePath, "r");
+	if (!af) {
+		syslog(LOG_ERR, "Error opening: %s : %s", aliasFilePath, strerror(errno));
+		botty_say(data->bot, responseTarget, "%s: There are no aliases to load.", caller);
+		return 0;
+	}
+
+	char lineBuf[MAX_MSG_LEN];
+	while (!feof(af)) {
+		char *line = fgets(lineBuf, MAX_MSG_LEN - 1, af);
+		if (!line) break;
+
+		char *pos = strrchr(lineBuf, NEWLINE_CHR);
+		if (pos) *pos = STREND_CHR;
+
+		char cmdBuf[MAX_MSG_LEN];
+		snprintf(cmdBuf, MAX_MSG_LEN - 1, "%c%s %s", CMD_CHAR, ALIAS_CMD_WORD, lineBuf);
+		BotInput_spoofUserInput(&data->bot->inputQueue, data->bot->master, data->bot->master, cmdBuf);
+	}
+
+	fclose(af);
+	syslog(LOG_INFO, "Successfully loaded aliases.");
+	botty_say(data->bot, responseTarget, "%s: Aliases loaded. Use '%s' to view them.", caller, ALIAS_CMD_LIST);
+	return 0;
 }
 
 int botcmd_builtin_registerAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
@@ -321,6 +423,7 @@ int botcmd_builtin_registerAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
     case ALIAS_ERR_NONE: {
       CmdAlias *aliasEntry = command_alias_get(data->bot->cmdAliases, alias);
       _printAlias(data, aliasEntry, alias);
+       _saveAlias(alias, aliasEntry);
       return 0;
     } break;
 
@@ -380,7 +483,11 @@ static int botcmd_builtin_rmAlias(CmdData *data, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+/*=============================================================================
 
+Send the bot to another channel
+
+=============================================================================*/
 static int botcmd_builtin_join(CmdData *data, char *args[MAX_BOT_ARGS]) {
   BotInfo *bot = (BotInfo *)data->bot;
   char *channel = args[1];
@@ -388,10 +495,11 @@ static int botcmd_builtin_join(CmdData *data, char *args[MAX_BOT_ARGS]) {
   return 0;
 }
 
+/*=============================================================================
 
-/*
- * Initialize the built in commands provided in this file.
- */
+Initialize the built in commands provided in this file
+
+=============================================================================*/
 int botcmd_builtin(BotInfo *bot) {
   botty_addCommand(bot, "help", 0, 1, &botcmd_builtin_help);
   botty_addCommand(bot, "info", 0, 1, &botcmd_builtin_info);
@@ -400,9 +508,10 @@ int botcmd_builtin(BotInfo *bot) {
   botty_addCommand(bot, "script", 0, 3, &botcmd_builtin_script);
   botty_addCommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
   botty_addCommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
-  botty_addCommand(bot, "alias", 0, 3, &botcmd_builtin_registerAlias);
-  botty_addCommand(bot, "lsalias", 0, 1, &botcmd_builtin_listAliases);
+  botty_addCommand(bot, ALIAS_CMD_WORD, 0, 3, &botcmd_builtin_registerAlias);
+  botty_addCommand(bot, ALIAS_CMD_LIST, 0, 1, &botcmd_builtin_listAliases);
   botty_addCommand(bot, "rmalias", 0, 2, &botcmd_builtin_rmAlias);
+  botty_addCommand(bot, "ldalias", 0, 1, &botcmd_builtin_loadAliases);
   botty_addCommand(bot, "join", 0, 2, &botcmd_builtin_join);
   return 0;
 }

@@ -102,3 +102,9 @@ void BotInputQueue_pushInput(BotInputQueue *inputQueue, char *input) {
   syslog(LOG_INFO, "%d queued messages", inputQueue->count);
 }
 
+void BotInput_spoofUserInput(BotInputQueue *inputQueue, char *user, char *srcChannel, char *msg) {
+  char spoofMsg[MAX_MSG_LEN];
+  snprintf(spoofMsg, MAX_MSG_LEN - 1, ":%s!%s PRIVMSG %s :%s", user, INPUT_SPOOFED_HOSTNAME, srcChannel, msg);
+  syslog(LOG_DEBUG, "Spoofing user bot input: %s", spoofMsg);
+  BotInputQueue_enqueueInput(inputQueue, spoofMsg);
+}

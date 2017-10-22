@@ -22,5 +22,5 @@ BotQueuedInput *BotInputQueue_dequeueInput(BotInputQueue *inputQueue);
 void BotInputQueue_initQueue(BotInputQueue *inputQueue);
 void BotInputQueue_clearQueue(BotInputQueue *inputQueue);
 void BotInputQueue_pushInput(BotInputQueue *inputQueue, char *input);
-
+void BotInput_spoofUserInput(BotInputQueue *inputQueue, char *user, char *srcChannel, char *msg);
 #endif

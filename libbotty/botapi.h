@@ -20,6 +20,8 @@ void botty_runProcess(BotInfo *bot, BotProcessFn fn, BotProcessArgs *args, char 
 
 void botty_addCommand(BotInfo *bot, char *cmd, int flags, int args, CommandFn fn);
 
+char *botty_getDirectory(void);
+
 #define botty_join(bot, channel) \
 	bot_join(bot, channel)
 

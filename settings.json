@@ -1,10 +1,10 @@
 {
   "port": "6697",
-  "server": "irc.freenode.net",
-  "channel": ["#derricks_bot_test", "", "", "", "", ""],
+  "server": "CHANGEME",
+  "channel": ["#CHANGEME", "", "", "", "", ""],
   "host":  "CIRCBotHost",
   "nick":  ["DiceBot", "DrawBot", "CIrcBot3"],
   "ident": "CIrcBot",
   "realname": "Botty McBotFace",
-  "master": "BassAceGold",
+  "master": "Derrick",
 }

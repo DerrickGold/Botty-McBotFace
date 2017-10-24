@@ -134,14 +134,11 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
     return ALIAS_ERR_ALREADYEXISTS;
   }
 
-  size_t keyLen = strlen(alias);
-  char *key = calloc(1, keyLen + 1);
+  char *key = strdup(alias);
   if (!key) {
     syslog(LOG_CRIT, "Error allocating alias key: %s", alias);
     return -1;
   }
-  strncpy(key, alias, keyLen);
-
 
   CmdAlias *aliasData = calloc(1, sizeof(CmdAlias));
   if (!aliasData) {
@@ -150,15 +147,13 @@ int command_reg_alias(HashTable *cmdTable, HashTable *cmdAliases, char *alias, c
   }
 
   //copy the text we plan on replacing with
-  size_t cmdLen = strlen(cmd);
-  aliasData->replaceWith = calloc(1, cmdLen + 1);
+  aliasData->replaceWith = strdup(cmd);
   if (!aliasData->replaceWith) {
     free(key);
     syslog(LOG_CRIT, "Error allocating space to hold alias command");
     return -1;
   }
-  strncpy(aliasData->replaceWith, cmd, cmdLen);
-  char *replaceWithEnd = aliasData->replaceWith + cmdLen;
+  char *replaceWithEnd = aliasData->replaceWith + strlen(cmd);
 
 
   char *tok = aliasData->replaceWith;

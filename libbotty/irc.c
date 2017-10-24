@@ -595,7 +595,6 @@ void bot_rmName(BotInfo *bot, char *channel, char *nick) {
   NickLists_rmNickFromChannel(&bot->allChannelNicks, channel, nick);
 }
 
-
 void bot_foreachName(BotInfo *bot, char *channel, void *d, NickListIterator iterator) {
   NickList_forEachNickInChannel(&bot->allChannelNicks, channel, d, iterator);
 }

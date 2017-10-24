@@ -101,13 +101,12 @@ void BotMsgQueue_enqueueTargetMsg(HashTable *msgQueues, char *target, BotQueuedM
       syslog(LOG_CRIT, "Error creating message queue for target: %s", target);
       return;
     }
-    size_t targetLen = strlen(target);
-    char *queueKey = calloc(1, targetLen + 1);
+
+    char *queueKey = strdup(target);
     if (!queueKey) {
       syslog(LOG_CRIT, "Error creating queue name: %s", target);
       return;
     }
-    strncpy(queueKey, target, targetLen);
 
     initMsgQueue(newQueue);
     targetQueue = HashEntry_create(queueKey, (void*)newQueue);

@@ -8,12 +8,9 @@ BotProcessArgs *BotProcess_makeArgs(void *data, char *responseTarget, BotProcess
   if (!args) return NULL;
 
   args->data = data;
-  if (responseTarget) {
-    size_t responseTargetLen = strlen(responseTarget);
-    args->target = calloc(1, responseTargetLen + 1);
-    if (!args->target) return NULL;
-    strncpy(args->target, responseTarget, responseTargetLen);
-  }
+  if (responseTarget)
+    args->target = strdup(responseTarget);
+
   args->free = fn;
   return args;
 }
@@ -21,7 +18,8 @@ BotProcessArgs *BotProcess_makeArgs(void *data, char *responseTarget, BotProcess
 void BotProcess_freeArgs(BotProcessArgs *args) {
   if (!args) return;
 
-  if (args->free) args->free(args->data);
+  if (args->free)
+    args->free(args->data);
 
   if (args->target) {
     free(args->target);

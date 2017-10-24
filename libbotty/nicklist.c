@@ -41,13 +41,12 @@ static int createListForChannel(ChannelNickLists *allNickLists, char *channel) {
 		return -1;
 	}
 
-	char *hashKey = calloc(1, MAX_CHAN_LEN);
+	char *hashKey = strdup(channel);
 	if (!hashKey) {
 		syslog(LOG_CRIT, "Error allocating channel as nick list hash key.");
 		return -1;
 	}
 
-	strncpy(hashKey, channel, MAX_CHAN_LEN);
 	HashEntry *channelList = HashEntry_create(hashKey, NULL);
 	HashEntry **inserted = HashTable_add(allNickLists->channelHash, channelList);
 

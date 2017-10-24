@@ -69,9 +69,7 @@ void whitelist_add(HashTable *whitelist, char *identity) {
 	if (validateArgs(whitelist, identity, __FUNCTION__))
 		return;
 
-	size_t nickLen = strlen(identity);
-
-	char *key = calloc(1, nickLen + 1);
+	char *key = strdup(identity);
 	if (!key) {
 		syslog(LOG_CRIT, "%s: Failed to whitelist user '%s': %s", __FUNCTION__, identity, strerror(errno));
 		return;

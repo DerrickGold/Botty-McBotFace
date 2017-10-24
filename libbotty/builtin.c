@@ -307,16 +307,25 @@ char *_getAliasFilePath(void) {
 	return aliasFilePath;
 }
 
+FILE *_openAliasFile(char *mode) {
+  char *aliasFile = _getAliasFilePath();
+  FILE *fp = fopen(_getAliasFilePath(), mode);
+  if (!fp) {
+    syslog(LOG_ERR, "%s: Error opening: %s: %s", __FUNCTION__, strerror(errno), aliasFile);
+    return NULL;
+  }
+
+  return fp;
+}
+
 char _aliasExistsInFile(char *alias) {
 	char found = 0;
 	char aliasKey[MAX_MSG_LEN];
 	snprintf(aliasKey, MAX_MSG_LEN - 1, "%s ", alias);
 
-	FILE *fp = fopen(_getAliasFilePath(), "r");
-	if (!fp) {
-		syslog(LOG_ERR, "%s: Error opening: %s", __FUNCTION__, strerror(errno));
-		return found;
-	}
+	FILE *fp = _openAliasFile("r");
+  if (!fp)
+    return found;
 
 	char lineBuf[MAX_MSG_LEN];
 	while (!feof(fp) && !found) {
@@ -352,11 +361,8 @@ static void _saveAlias(char *alias, CmdAlias *aliasEntry) {
 		return;
 	}
 
-	FILE *af = fopen(_getAliasFilePath(), "a");
-	if (!af) {
-		syslog(LOG_ERR, "%s: Error opening: %s", __FUNCTION__, strerror(errno));
-		return;
-	}
+	FILE *af = _openAliasFile("a");
+  if (!af) return;
 
 	fprintf(af, "%s %s\n", alias, argsList);
 	fclose(af);
@@ -368,14 +374,8 @@ int botcmd_builtin_loadAliases(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
 
 	syslog(LOG_INFO, "Loading aliases from %s", ALIAS_FILE_PATH);
-
-	char *baseDir = botty_getDirectory();
-	char aliasFilePath[MAX_FILEPATH_LEN];
-	snprintf(aliasFilePath, MAX_FILEPATH_LEN - 1, "%s/%s", baseDir, ALIAS_FILE_PATH);
-
-	FILE *af = fopen(aliasFilePath, "r");
+	FILE *af = _openAliasFile("r");
 	if (!af) {
-		syslog(LOG_ERR, "Error opening: %s : %s", aliasFilePath, strerror(errno));
 		botty_say(data->bot, responseTarget, "%s: There are no aliases to load.", caller);
 		return 0;
 	}

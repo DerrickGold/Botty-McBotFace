@@ -10,10 +10,11 @@ static char runDirectory[MAX_FILEPATH_LEN];
 //initialize the bot using data set in *bot
 int botty_init(BotInfo *bot, int argc, char *argv[], int argstart) {
 
-  realpath(argv[0], runDirectory);
-  char *pathDir = dirname(runDirectory);
+  char tempDir[MAX_FILEPATH_LEN];
+  realpath(argv[0], tempDir);
+  char *pathDir = dirname(tempDir);
   snprintf(runDirectory, MAX_FILEPATH_LEN - 1, "%s", pathDir);
-
+  syslog(LOG_INFO, "Setting run directory: %s", runDirectory);
   //keep track of irc singleton references are used, so that when
   //we are freeing bottys, we can clear up the shared irc data.
   ircRefCount += (bot_irc_init() == 0);

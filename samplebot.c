@@ -214,7 +214,7 @@ int botcmd_roll(CmdData *data, char *args[MAX_BOT_ARGS]) {
 }
 
 
-static void printNick(NickList *n, void *data) {
+static void printNick(NickListEntry *n, void *data) {
   syslog(LOG_INFO, "NICKDUMP: %s", n->nick);
 }
 

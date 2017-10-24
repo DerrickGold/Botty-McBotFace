@@ -14,6 +14,7 @@
 #include "cmddata.h"
 #include "botmsgqueues.h"
 #include "whitelist.h"
+#include "nicklist.h"
 
 #define QUEUE_SEND_MSG 1
 
@@ -462,12 +463,7 @@ int bot_init(BotInfo *bot, int argc, char *argv[], int argstart) {
 
   if (BotMsgQueue_init(&bot->msgQueues)) return -1;
   if (command_alias_init(&bot->cmdAliases)) return -1;
-
-  bot->chanNickLists = HashTable_init(CHANNICKS_HASH_SIZE);
-  if (!bot->chanNickLists) {
-  	syslog(LOG_CRIT, "bot_init: Error initializing hash table for channel nick lists");
-  	return -1;
-  }
+  if (NickLists_init(&bot->allChannelNicks)) return -1;
   if (whitelist_init(&bot->botPermissions)) return -1;
   BotInputQueue_initQueue(&bot->inputQueue);
   return 0;
@@ -499,7 +495,7 @@ void bot_cleanup(BotInfo *bot) {
   if (!bot) return;
 
   BotProcess_freeProcesaQueue(&bot->procQueue);
-  bot_purgeNames(bot);
+  NickList_cleanupAllNickLists(&bot->allChannelNicks);
   command_cleanup(&bot->commands);
   BotMsgQueue_cleanQueues(&bot->msgQueues);
   BotInputQueue_clearQueue(&bot->inputQueue);
@@ -592,106 +588,16 @@ int bot_regName(BotInfo *bot, char *channel, char *nick) {
 		return -1;
 	}
 
-  NickList *curNick;
-  NickList *newNick = calloc(1, sizeof(NickList));
-  if (!newNick) {
-    perror("NickList Alloc Error: ");
-    return -1;
-  }
-
-  size_t diff = strcspn(nick, ILLEGAL_NICK_CHARS);
-  nick += (diff == 0);
-  syslog(LOG_NOTICE, "Registering Nick: %s", nick);
-  strncpy(newNick->nick, nick, MAX_NICK_LEN);
-
-	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
-	if (!channelList) {
-		char *hashKey = calloc(1, MAX_CHAN_LEN);
-		if (!hashKey) {
-			syslog(LOG_CRIT, "Error allocating channel as nick list hash key.");
-			free(newNick);
-			return -1;
-		}
-		strncpy(hashKey, channel, MAX_CHAN_LEN);
-		channelList = HashEntry_create(hashKey, NULL);
-		HashTable_add(bot->chanNickLists, channelList);
-	}
-
-	curNick = (NickList *)channelList->data;
-  if (!curNick) {
-    //first name
-    channelList->data = (void *)newNick;
-    return -1;
-  }
-
-  while (curNick->next) curNick = curNick->next;
-  curNick->next = newNick;
-  return 0;
+  return NickLists_addNickToChannel(&bot->allChannelNicks, channel, nick);
 }
 
 void bot_rmName(BotInfo *bot, char *channel, char *nick) {
-  NickList *curNick, *lastNick;
-
-	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
-	if (!channelList) {
-		syslog(LOG_WARNING, "Error: Attempted to remove nick from channel nick list that doesn't exist");
-		return;
-	}
-
-  curNick = (NickList *)channelList->data;
-  lastNick = curNick;
-  while (curNick && strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
-    syslog(LOG_INFO, "Matching: %s with %s", curNick->nick, nick);
-    lastNick = curNick;
-    curNick = curNick->next;
-  }
-
-  //make sure the node we stopped on is the right one
-  if (curNick && !strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
-    if ((NickList *)channelList->data == curNick) channelList->data = (void *)curNick->next;
-    else lastNick->next = curNick->next;
-    free(curNick);
-  } else
-    syslog(LOG_WARNING, "Failed to remove \'%s\' from nick list, does not exist", nick);
-
-}
-
-static int purgeNameList(NickList *list) {
-	NickList *curNick = list, *next;
-  while (curNick) {
-    next = curNick->next;
-    free(curNick);
-    curNick = next;
-  }
-  return 0;
-}
-
-static int clearHashedNickList(HashEntry *entry, void *data) {
-	purgeNameList(entry->data);
-	free(entry->key);
-	entry->key = NULL;
-	return 0;
-}
-
-void bot_purgeNames(BotInfo *bot) {
-	HashTable_forEach(bot->chanNickLists, NULL, clearHashedNickList);
-	HashTable_destroy(bot->chanNickLists);
-	bot->chanNickLists = NULL;
+  NickLists_rmNickFromChannel(&bot->allChannelNicks, channel, nick);
 }
 
 
-void bot_foreachName(BotInfo *bot, char *channel, void *d, void (*fn) (NickList *nick, void *data)) {
-	HashEntry *channelList = HashTable_find(bot->chanNickLists, channel);
-	if (!channelList) {
-		syslog(LOG_CRIT, "Error iterating through nicks in channel %s, no nicks registered here.", channel);
-		return;
-	}
-
-  NickList *curNick = channelList->data;
-  while (curNick) {
-    if (fn) fn(curNick, d);
-    curNick = curNick->next;
-  }
+void bot_foreachName(BotInfo *bot, char *channel, void *d, NickListIterator iterator) {
+  NickList_forEachNickInChannel(&bot->allChannelNicks, channel, d, iterator);
 }
 
 int bot_isThrottled(BotInfo *bot) {

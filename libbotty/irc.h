@@ -7,6 +7,7 @@
 #include "connection.h"
 #include "botprocqueue.h"
 #include "botinputqueue.h"
+#include "nicklist.h"
 
 typedef enum {
   CONSTATE_NONE,
@@ -15,10 +16,6 @@ typedef enum {
   CONSTATE_LISTENING,
 } ConState;
 
-typedef struct NickList {
-  char nick[MAX_NICK_LEN];
-  struct NickList *next;
-} NickList;
 
 typedef struct IrcInfo {
   char port[MAX_PORT_LEN];
@@ -55,9 +52,9 @@ typedef struct BotInfo {
 
   HashTable *msgQueues;
   HashTable *cmdAliases;
-  HashTable *chanNickLists;
   HashTable *botPermissions;
 
+  ChannelNickLists allChannelNicks;
   //some pointer the user can use
   void *data;
 } BotInfo;
@@ -91,7 +88,7 @@ void bot_rmName(BotInfo *bot, char *channel, char *nick);
 
 void bot_purgeNames(BotInfo *bot);
 
-void bot_foreachName(BotInfo *bot, char *channel, void *d, void (*fn) (NickList *nick, void *data));
+void bot_foreachName(BotInfo *bot, char *channel, void *d, NickListIterator iterator);
 
 int bot_isThrottled(BotInfo *bot);
 

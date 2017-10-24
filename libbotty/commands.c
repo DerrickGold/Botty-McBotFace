@@ -207,8 +207,23 @@ CmdAlias *command_alias_get(HashTable *cmdAliases, char *alias) {
   return NULL;
 }
 
+
+#define tokenize() do {                             \
+  tok_off = strchr(tok, BOT_ARG_DELIM);             \
+  if (tok_off && i < argCount - 1) *tok_off = '\0'; \
+  msg->msgTok[i] = tok;                             \
+} while(0)
+
+#define nextToken() do {  \
+  if (!tok_off)           \
+    return cmd;           \
+  tok = (++tok_off);      \
+} while (0)
+
+
 BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAliases) {
-  if (msg->msg[0] != CMD_CHAR) return NULL;
+  if (msg->msg[0] != CMD_CHAR)
+    return NULL;
 
   BotCmd *cmd = NULL;
   CmdAlias *alias = NULL;
@@ -217,28 +232,25 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
   char *tok_off = NULL;
   int i = 0;
 
+  tokenize();
+  //check first if word is a registered command
+  if ((cmd = command_get(cmdTable, msg->msgTok[CMD_NAME_POS]))) {
+    argCount = cmd->args;
+    i++;
+  }
+  //then check if its an alias if it is not
+  else if ((alias= command_alias_get(cmdAliases, msg->msgTok[CMD_NAME_POS]))) {
+    cmd = alias->cmd;
+    argCount = alias->cmd->args;
+
+    for (i = 0; i < alias->argc; i++)
+      msg->msgTok[i] = alias->args[i];
+  }
+  nextToken();
+
   while(i < argCount) {
-    tok_off = strchr(tok, BOT_ARG_DELIM);
-    if (tok_off && i < argCount - 1) *tok_off = '\0';
-    msg->msgTok[i] = tok;
-
-    if (i == CMD_NAME_POS) {
-      cmd = command_get(cmdTable, msg->msgTok[CMD_NAME_POS]);
-      if (cmd)  argCount = cmd->args;
-      else {
-        if ((alias= command_alias_get(cmdAliases, msg->msgTok[CMD_NAME_POS]))) {
-          cmd = alias->cmd;
-          argCount = alias->cmd->args;
-          for (i = 0; i < alias->argc; i++)
-            msg->msgTok[i] = alias->args[i];
-
-          i--;
-        }
-      }
-    }
-    if (!tok_off) break;
-    tok_off++;
-    tok = tok_off;
+    tokenize();
+    nextToken();
     i++;
   }
 

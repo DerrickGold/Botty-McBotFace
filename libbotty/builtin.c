@@ -23,6 +23,7 @@ typedef struct ScriptPtr {
   int fd;
   char notify;
   char privmsg;
+  char botInput;
 } ScriptPtr;
 
 typedef struct ClearQueueContainer{
@@ -30,6 +31,8 @@ typedef struct ClearQueueContainer{
   unsigned int pid;
 } ClearQueueContainer;
 
+
+static unsigned int RunningScripts = 0;
 
 /*
  * If necessary, returns where the bot received its input
@@ -105,6 +108,7 @@ static int _script(void *b, char *procOwner, BotProcessArgs *sArgs) {
   ScriptPtr *fptr= (ScriptPtr *)sArgs->data;
   char *responseTarget = sArgs->target;
   char buf[MAX_MSG_LEN + 1];
+  char done = 0;
   memset(buf, 0, sizeof(buf));
 
   ssize_t r = read(fptr->fd, buf, MAX_MSG_LEN);
@@ -112,34 +116,45 @@ static int _script(void *b, char *procOwner, BotProcessArgs *sArgs) {
     //no data
     return 1;
   }
-  else if (r > 0) {
-    char *start = strtok(buf, SCRIPT_OUTPIT_DELIM);
-    while (start) {
-      if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
-        fptr->notify = (fptr->notify + 1) % 2;
-      }
-      else if (!strncmp(start, SCRIPT_OUTPUT_REDIRECT_TOKEN, MAX_MSG_LEN)) {
-      	fptr->privmsg = (fptr->privmsg + 1) % 2;
-      }
-      else {
-      	responseTarget = fptr->privmsg ? procOwner : sArgs->target;
-
-        if (fptr->notify) {
-          if (botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
-            goto _fin;
-        }
-        else if (botty_say(bot, responseTarget, "%s", start) < 0)
-          goto _fin;
-      }
-      start = strtok(NULL, SCRIPT_OUTPIT_DELIM);
-    }
-    return 1;
+  else if (r == 0) {
+    BotProcess_freeArgs(sArgs);
+    RunningScripts--;
+    return -1;
   }
 
-  _fin:
-  //return negative value to indicate the process
-  //is complete
+  char *start = strtok(buf, SCRIPT_OUTPIT_DELIM);
+  while (start && !done) {
+    //todo: make a hash for this stuff...
+    if (!strncmp(start, SCRIPT_OUTPUT_MODE_TOKEN, MAX_MSG_LEN)) {
+      fptr->notify = !fptr->notify;
+    }
+    else if (!strncmp(start, SCRIPT_OUTPUT_REDIRECT_TOKEN, MAX_MSG_LEN)) {
+    	fptr->privmsg = !fptr->privmsg;
+    }
+    else if (!strncmp(start, SCRIPT_OUTPUT_BOTINPUT_TOKEN, MAX_MSG_LEN)) {
+      fptr->botInput = !fptr->botInput;
+    }
+    else {
+    	responseTarget = fptr->privmsg ? procOwner : sArgs->target;
+      if (fptr->botInput) {
+        BotInput_spoofUserInput(&bot->inputQueue, procOwner, responseTarget, start);
+        done = 1;
+      }
+      else {
+        if (fptr->notify && botty_send(bot, responseTarget, NOTICE_ACTION, NULL, "%s", start) < 0)
+          done = 1;
+        else if (botty_say(bot, responseTarget, "%s", start) < 0)
+          done = 1;
+      }
+    }
+    start = strtok(NULL, SCRIPT_OUTPIT_DELIM);
+  }
+
+  if (!done)
+    return 1;
+
   BotProcess_freeArgs(sArgs);
+  RunningScripts--;
   return -1;
 }
 
@@ -148,6 +163,17 @@ int botcmd_builtin_script(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *scriptArgs = args[2];
   char *caller = data->msg->nick;
   char *responseTarget = botcmd_builtin_getTarget(data);
+
+  if ( RunningScripts >= MAX_RUNNING_SCRIPTS ) {
+    syslog(LOG_WARNING, "%s: Hit max number of allowable scripts: %d/%d",
+      __FUNCTION__ ,RunningScripts, MAX_RUNNING_SCRIPTS);
+
+    botty_say(data->bot, responseTarget, "Bot has hit the max allowable number of scripts to run");
+    return 0;
+  }
+  RunningScripts++;
+
+
 
   size_t cmdLen = MAX_MSG_LEN + strlen(SCRIPTS_DIR) + strlen(caller) + strlen(SCRIPT_OUTPUT_REDIRECT);
   char fullCmd[cmdLen];
@@ -277,6 +303,34 @@ int botcmd_builtin_killProcess(CmdData *data, char *args[MAX_BOT_ARGS]) {
     BotProcess_terminate(toTerminate);
 
   botty_say(data->bot, responseTarget, "%s: terminated process with PID: %d.", caller, pid);
+  return 0;
+}
+
+int botcmd_builtin_killAllProcesses(CmdData *data, char *args[MAX_BOT_ARGS]) {
+  char *caller = data->msg->nick;
+  char *responseTarget = botcmd_builtin_getTarget(data);
+
+  syslog(LOG_DEBUG, "%s: %s is Killing all processes for %s", __FUNCTION__, caller, responseTarget);
+  BotProcess *curProc = data->bot->procQueue.head;
+
+  while (curProc) {
+    BotProcess *next = curProc->next;
+    ClearQueueContainer container = {data->bot->msgQueues, curProc->pid};
+    int cleared = HashTable_forEach(data->bot->msgQueues, (void *)&container, &_clearQueueHelper);
+    syslog(LOG_DEBUG, "Cleared %d pid messages from queue", cleared);
+
+    BotProcess *toTerminate = BotProcess_findProcessByPid(&data->bot->procQueue, curProc->pid);
+    if (!toTerminate && !cleared) {
+      syslog(LOG_WARNING, "%s: Failed to find process with PID: %d", __FUNCTION__, curProc->pid);
+      continue;
+    }
+    else if (toTerminate)
+      BotProcess_terminate(toTerminate);
+
+    curProc = next;
+  }
+
+  botty_say(data->bot, responseTarget, "%s: terminated processes for %s.", caller, responseTarget);
   return 0;
 }
 
@@ -508,6 +562,7 @@ int botcmd_builtin(BotInfo *bot) {
   botty_addCommand(bot, "script", 0, 3, &botcmd_builtin_script);
   botty_addCommand(bot, "ps", 0, 1, &botcmd_builtin_listProcesses);
   botty_addCommand(bot, "kill", 1, 2, &botcmd_builtin_killProcess);
+  botty_addCommand(bot, "killall", 1, 1, &botcmd_builtin_killAllProcesses);
   botty_addCommand(bot, ALIAS_CMD_WORD, 0, 3, &botcmd_builtin_registerAlias);
   botty_addCommand(bot, ALIAS_CMD_LIST, 0, 1, &botcmd_builtin_listAliases);
   botty_addCommand(bot, "rmalias", 0, 2, &botcmd_builtin_rmAlias);

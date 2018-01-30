@@ -20,7 +20,6 @@ static HashEntry *getNicksForChannel(ChannelNickLists *allNickLists, char *chann
 static NickListEntry *makeNickListEntry(char *nick) {
 	NickListEntry *newNick = calloc(1, sizeof(NickListEntry));
   if (!newNick) {
-    //perror("NickList Alloc Error: ");
     syslog(LOG_ERR, "%s: Error creating NickListEntry for nick %s: %s",
     	__FUNCTION__, nick, strerror(errno));
     return NULL;

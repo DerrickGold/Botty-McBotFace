@@ -50,6 +50,7 @@ static int cleanupHashedBox(HashEntry *entry, void *data) {
   //cleanup user name and stored messages
   if (entry->key) free(entry->key);
   cleanupMailBox((MailBox *)entry->data);
+  entry->data = NULL;
   return 0;
 }
 
@@ -78,12 +79,11 @@ int saveMail(char *to, char *from, char *message) {
       return -1;
     }
 
-    char *nick = calloc(1, strlen(to) + 1);
+    char *nick = strdup(to);
     if (!nick) {
       syslog(LOG_CRIT, "error allocating nick for user's inbox");
       return -1;
     }
-    strncpy(nick, to, strlen(to));
 
     HashEntry *newUser = HashEntry_create(nick, newBox);
     if (!newUser) {
@@ -104,7 +104,9 @@ int saveMail(char *to, char *from, char *message) {
       syslog(LOG_CRIT, "Fatal error, could not retrieve created user (%s)", nick);
       return -1;
     }
-    syslog(LOG_DEBUG, "'%s''s box was found", nick);
+    syslog(LOG_DEBUG, "'%s''s box was found", to);
+  } else {
+    syslog(LOG_INFO, "%s has a mail box already", to);
   }
 
   //make the new mail message to store
@@ -113,22 +115,27 @@ int saveMail(char *to, char *from, char *message) {
     syslog(LOG_CRIT, "error allocating new mail for nick %s", to);
     return -1;
   }
+  syslog(LOG_INFO, "copying message details");
   time(&newMail->sent);
   strncpy(newMail->from, from, MAX_NICK_LEN);
   strncpy(newMail->msg, message, MAX_MSG_LEN);
+  newMail->next = NULL;
 
   //now add the new message to the user's inbox
   MailBox *inbox = (MailBox *)user->data;
   if (inbox->messages == NULL) {
     inbox->count = 1;
     inbox->messages = newMail;
+    syslog(LOG_INFO, "First message added to mail box for %s", to);
   } else {
     Mail *curMail = inbox->messages;
+    syslog(LOG_INFO, "Adding message to end of inbox...");
     while (curMail->next) curMail = curMail->next;
     curMail->next = newMail;
-    inbox->messages++;
+    inbox->count++;
   }
 
+  syslog(LOG_INFO, "Successfully sent message to %s", to);
   return 0;
 }
 
@@ -145,19 +152,19 @@ char *getNotified(char *nick) {
 //get the number of messages available for a user
 int numMsgs(char *nick) {
   if (!mailBoxes) {
-    syslog(LOG_DEBUG, "numMsgs: no global mailbox allocated.");
+    syslog(LOG_INFO, "numMsgs: no global mailbox allocated.");
     return 0;
   }
 
   HashEntry *user = HashTable_find(mailBoxes, nick);
   if (!user) {
-    syslog(LOG_DEBUG, "numMsgs: no user: '%s'", nick);
+    syslog(LOG_INFO, "numMsgs: no user: '%s'", nick);
     return 0;
   }
 
   MailBox *box = (MailBox *)user->data;
   if (box->count <= 0 || !box->messages) {
-    syslog(LOG_DEBUG, "numMsgs: %s has no mail", nick);
+    syslog(LOG_INFO, "numMsgs: %s has no mail", nick);
     return 0;
   }
 
@@ -168,6 +175,7 @@ void readMail(BotInfo *bot, char *respTarget, char *nick) {
   int msgCount = numMsgs(nick);
   if (!msgCount) return;
 
+  syslog(LOG_INFO, "readMail: Accessing last message for '%s' of %d", nick, msgCount);
   //if msg count is > 0, then the user exists and has a box with messages
   HashEntry *user = HashTable_find(mailBoxes, nick);
   MailBox *box = (MailBox *)user->data;
@@ -175,11 +183,13 @@ void readMail(BotInfo *bot, char *respTarget, char *nick) {
   box->messages = message->next;
 
   //get sent time
-  char buff[20];
-  struct tm * timeinfo = localtime (&message->sent);
+  char buff[32];
+  struct tm * timeinfo = localtime(&message->sent);
   strftime(buff, sizeof(buff), "%b %d @ %H:%M", timeinfo);
 
+  syslog(LOG_INFO, "Retrieved stored message: %s: [%s <%s>] %s", nick, buff, message->from, message->msg);
   botty_say(bot, respTarget, "%s: [%s <%s>] %s", nick, buff, message->from, message->msg);
+
   free(message);
   box->count--;
 }

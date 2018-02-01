@@ -225,6 +225,7 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
   if (msg->msg[0] != CMD_CHAR)
     return NULL;
 
+  syslog(LOG_DEBUG, "Starting to parse command: %s", msg->msg);
   BotCmd *cmd = NULL;
   CmdAlias *alias = NULL;
   int argCount = MAX_BOT_ARGS;
@@ -253,7 +254,7 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
     nextToken();
     i++;
   }
-
+  syslog(LOG_DEBUG, "Done tokenizing command");
   return cmd;
 }
 

@@ -172,6 +172,7 @@ int numMsgs(char *nick) {
 }
 
 void readMail(BotInfo *bot, char *respTarget, char *nick) {
+  syslog(LOG_DEBUG, "readMail: getting message count first");
   int msgCount = numMsgs(nick);
   if (!msgCount) return;
 

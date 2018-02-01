@@ -311,6 +311,11 @@ static int userLeft(BotInfo *bot, IrcMsg *msg) {
   return callback_call_r(bot->cb, CALLBACK_USRPART, (void *)bot, msg);
 }
 
+static int userDisconnect(BotInfo *bot, IrcMsg *msg) {
+  bot_rmDisconnectedName(bot, msg->nick);
+  return callback_call_r(bot->cb, CALLBACK_USRQUIT, (void *)bot, msg);
+}
+
 static int userNickChange(BotInfo *bot, IrcMsg *msg) {
   bot_rmName(bot, msg->channel, msg->nick);
 
@@ -384,6 +389,7 @@ int bot_parse(BotInfo *bot, char *line) {
       break;
     }
     else {
+      syslog(LOG_DEBUG, "Allocating and parsing IRC msg: %s", line);
       IrcMsg *msg = ircMsg_irc_new(line);
       BotCmd *cmd = command_parse_ircmsg(msg, bot->commands, bot->cmdAliases);
       IRC_API_Actions action = IRC_ACTION_NOP;
@@ -406,6 +412,8 @@ int bot_parse(BotInfo *bot, char *line) {
           servStat = userJoined(bot, msg);
           break;
         case IRC_ACTION_QUIT:
+          servStat = userDisconnect(bot, msg);
+          break;
         case IRC_ACTION_PART:
           servStat = userLeft(bot, msg);
           break;
@@ -420,6 +428,7 @@ int bot_parse(BotInfo *bot, char *line) {
       else
         callback_call_r(bot->cb, CALLBACK_MSG, (void*)bot, msg);
 
+      syslog(LOG_DEBUG, "Free'ing parsed and allocated message");
       free(msg);
     }
     break;
@@ -593,6 +602,10 @@ int bot_regName(BotInfo *bot, char *channel, char *nick) {
 
 void bot_rmName(BotInfo *bot, char *channel, char *nick) {
   NickLists_rmNickFromChannel(&bot->allChannelNicks, channel, nick);
+}
+
+void bot_rmDisconnectedName(BotInfo *bot, char *nick) {
+  NickLists_rmNickFromAll(&bot->allChannelNicks, nick);
 }
 
 void bot_foreachName(BotInfo *bot, char *channel, void *d, NickListIterator iterator) {

@@ -63,6 +63,15 @@ static int onUsrPart(void *data, IrcMsg *msg) {
   return 0;
 }
 
+static int onUsrQuit(void *data, IrcMsg *msg) {
+  if (!data || !msg) return -1;
+  syslog(LOG_INFO, "%s has disconnected the server", msg->nick);
+  //reset mail notification
+  char *notStatus = getNotified(msg->nick);
+  if (notStatus) *notStatus = 0;
+  return 0;
+}
+
 static int onNickChange(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   BotInfo *i = (BotInfo *)data;
@@ -339,6 +348,7 @@ int main(int argc, char *argv[]) {
   botty_setCallback(&botInfo, CALLBACK_MSG, &onMsg);
   botty_setCallback(&botInfo, CALLBACK_USRJOIN, &onUsrJoin);
   botty_setCallback(&botInfo, CALLBACK_USRPART, &onUsrPart);
+  botty_setCallback(&botInfo, CALLBACK_USRQUIT, &onUsrQuit);
   botty_setCallback(&botInfo, CALLBACK_SERVERCODE, &onServerResp);
   botty_setCallback(&botInfo, CALLBACK_USRNICKCHANGE, &onNickChange);
   botty_setCallback(&botInfo, CALLBACK_USRINVITE, &onUsrInvite);

@@ -86,6 +86,8 @@ int bot_regName(BotInfo *bot, char *channel, char *nick);
 
 void bot_rmName(BotInfo *bot, char *channel, char *nick);
 
+void bot_rmDisconnectedName(BotInfo *bot, char *nick);
+
 void bot_purgeNames(BotInfo *bot);
 
 void bot_foreachName(BotInfo *bot, char *channel, void *d, NickListIterator iterator);

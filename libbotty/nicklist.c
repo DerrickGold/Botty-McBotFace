@@ -133,6 +133,19 @@ int NickLists_addNickToChannel(ChannelNickLists *allNickLists, char *channel, ch
 	return addNickToChannelHash(channelHash, nick);
 }
 
+static int rmNickFromAllChannels(HashEntry *entry, void *data) {
+	char *name = (char *)data;
+	syslog(LOG_DEBUG, "Checking channel hash: %s for %s", entry->key, name);
+	rmNickFromChannelHash(entry, name);
+	return 0;
+}
+
+void NickLists_rmNickFromAll(ChannelNickLists *allNickLists, char *nick) {
+	syslog(LOG_INFO, "%s: Purging nick from all channels, they  have disconnected", __FUNCTION__);
+	HashTable_forEach(allNickLists->channelHash, (void *)nick, &rmNickFromAllChannels);
+	syslog(LOG_INFO, "%s: Finished purging nick from all channels: %s", __FUNCTION__, nick);
+}
+
 void NickLists_rmNickFromChannel(ChannelNickLists *allNickLists, char *channel, char *nick) {
 	HashEntry *channelHash = getNicksForChannel(allNickLists, channel);
 	if (!channelHash) {

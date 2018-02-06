@@ -110,6 +110,7 @@ void BotMsgQueue_enqueueTargetMsg(HashTable *msgQueues, char *target, BotQueuedM
 
     initMsgQueue(newQueue);
     targetQueue = HashEntry_create(queueKey, (void*)newQueue);
+    syslog(LOG_INFO, "%s: Adding message queue for %s to hash", __FUNCTION__, target);
     HashTable_add(msgQueues, targetQueue);
   }
 

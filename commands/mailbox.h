@@ -24,12 +24,11 @@ typedef struct MailBox {
   Mail *messages;
 } MailBox;
 
-char *getNotified(char *nick);
-int numMsgs(char *nick);
-void readMail(BotInfo *bot, char *respTarget, char *nick);
-int saveMail(char *to, char *from, char *message);
-void destroyAllMailBoxes(void);
-void mailNotify(BotInfo *bot, char *channel, char *nick);
+void MailBox_readMsg(BotInfo *bot, char *respTarget, char *nick);
+int MailBox_saveMsg(char *to, char *from, char *message);
+void MailBox_destroyAll(void);
+void MailBox_notifyUser(BotInfo *bot, char *channel, char *nick);
+void MailBox_resetUserNotification(char *nick);
 
 int botcmd_mail(CmdData *data, char *args[MAX_BOT_ARGS]);
 

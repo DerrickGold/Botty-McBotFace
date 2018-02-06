@@ -2,17 +2,51 @@
 
 HashTable *mailBoxes = NULL;
 
+//get the number of messages available for a user
+static int numMsgs(char *nick) {
+  if (!mailBoxes) {
+    syslog(LOG_INFO, "numMsgs: no global mailbox allocated.");
+    return 0;
+  }
+
+  HashEntry *user = HashTable_find(mailBoxes, nick);
+  if (!user) {
+    syslog(LOG_INFO, "numMsgs: no user: '%s'", nick);
+    return 0;
+  }
+
+  MailBox *box = (MailBox *)user->data;
+  if (box->count <= 0 || !box->messages) {
+    syslog(LOG_INFO, "numMsgs: %s has no mail", nick);
+    return 0;
+  }
+
+  return box->count;
+}
+
+
+static char *getNotified(char *nick) {
+  HashEntry *user = HashTable_find(mailBoxes, nick);
+  if (!user) return NULL;
+
+  MailBox *box = (MailBox *)user->data;
+  if (!box) return NULL;
+
+  return &box->notified;
+}
+
+
 //mail command to read any inboxed messages
 int botcmd_mail(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
-  readMail(data->bot, responseTarget, data->msg->nick);
+  MailBox_readMsg(data->bot, responseTarget, data->msg->nick);
   int left = numMsgs(data->msg->nick);
   botty_say(data->bot, responseTarget, "%s: You have %d message(s) remaining.", data->msg->nick, left);
   return 0;
 }
 
 
-void mailNotify(BotInfo *bot, char *channel, char *nick) {
+void MailBox_notifyUser(BotInfo *bot, char *channel, char *nick) {
   //mail notification
   int left = numMsgs(nick);
   if (left > 0) {
@@ -25,6 +59,11 @@ void mailNotify(BotInfo *bot, char *channel, char *nick) {
   }
 }
 
+void MailBox_resetUserNotification(char *nick) {
+  char *notStatus = getNotified(nick);
+  if (notStatus) *notStatus = 0;
+}
+
 
 /*=====================================================
  * Mailbox implementation
@@ -33,7 +72,7 @@ void mailNotify(BotInfo *bot, char *channel, char *nick) {
  *===================================================*/
 
 
-void cleanupMailBox(MailBox *box) {
+static void cleanupMailBox(MailBox *box) {
   if (!box) return;
 
   Mail *cur = box->messages, *next = NULL;
@@ -54,12 +93,12 @@ static int cleanupHashedBox(HashEntry *entry, void *data) {
   return 0;
 }
 
-void destroyAllMailBoxes(void) {
+void MailBox_destroyAll(void) {
   HashTable_forEach(mailBoxes, NULL, &cleanupHashedBox);
   HashTable_destroy(mailBoxes);
 }
 
-int saveMail(char *to, char *from, char *message) {
+int MailBox_saveMsg(char *to, char *from, char *message) {
   //make sure our mail boxes exist
   if (!mailBoxes) {
     mailBoxes = HashTable_init(MIN_MAIL_BOXES);
@@ -139,39 +178,9 @@ int saveMail(char *to, char *from, char *message) {
   return 0;
 }
 
-char *getNotified(char *nick) {
-  HashEntry *user = HashTable_find(mailBoxes, nick);
-  if (!user) return NULL;
 
-  MailBox *box = (MailBox *)user->data;
-  if (!box) return NULL;
 
-  return &box->notified;
-}
-
-//get the number of messages available for a user
-int numMsgs(char *nick) {
-  if (!mailBoxes) {
-    syslog(LOG_INFO, "numMsgs: no global mailbox allocated.");
-    return 0;
-  }
-
-  HashEntry *user = HashTable_find(mailBoxes, nick);
-  if (!user) {
-    syslog(LOG_INFO, "numMsgs: no user: '%s'", nick);
-    return 0;
-  }
-
-  MailBox *box = (MailBox *)user->data;
-  if (box->count <= 0 || !box->messages) {
-    syslog(LOG_INFO, "numMsgs: %s has no mail", nick);
-    return 0;
-  }
-
-  return box->count;
-}
-
-void readMail(BotInfo *bot, char *respTarget, char *nick) {
+void MailBox_readMsg(BotInfo *bot, char *respTarget, char *nick) {
   syslog(LOG_DEBUG, "readMail: getting message count first");
   int msgCount = numMsgs(nick);
   if (!msgCount) return;

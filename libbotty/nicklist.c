@@ -5,6 +5,11 @@
 #include "nicklist.h"
 #include "hash.h"
 
+struct NickLocator {
+	char **channelStore;
+	char *key;
+	int index;
+};
 
 static char *sanitizeNick(char *nick) {
 	size_t diff = strcspn(nick, ILLEGAL_NICK_CHARS);
@@ -48,6 +53,7 @@ static int createListForChannel(ChannelNickLists *allNickLists, char *channel) {
 
 	HashEntry *channelList = HashEntry_create(hashKey, NULL);
 	HashEntry **inserted = HashTable_add(allNickLists->channelHash, channelList);
+	allNickLists->channelCount++;
 
 	syslog(LOG_INFO, "%s: Inserted %s into channel nick lists: status: %s",
 		__FUNCTION__, hashKey, (inserted != NULL) ? "true" : "false");
@@ -113,6 +119,54 @@ static int rmNickFromChannelHash(HashEntry *channelHash, char *nick) {
   return 0;
 }
 
+static int isNickInChannel(HashEntry *channelHash, char *nick) {
+	if (!channelHash) {
+		syslog(LOG_CRIT, "%s: ChannelHash is null.", __FUNCTION__);
+		return -1;
+	}
+
+	NickListEntry *curNick = (NickListEntry *)channelHash->data;
+	NickListEntry *lastNick = curNick;
+
+	nick = sanitizeNick(nick);
+
+	while (curNick && strncmp(curNick->nick, nick, MAX_NICK_LEN)) {
+		lastNick = curNick;
+		curNick = curNick->next;
+	}
+
+	//make sure the node we stopped on is the right one
+	return (curNick && !strncmp(curNick->nick, nick, MAX_NICK_LEN));
+}
+
+static int scanForNickInAllChannels(HashEntry *entry, void *data) {
+	struct NickLocator *locator = data;
+	syslog(LOG_DEBUG, "Checking channel hash: %s for %s", entry->key, locator->key);
+
+	if (isNickInChannel(entry, locator->key)) {
+		locator->channelStore[locator->index] = entry->key;
+		locator->index++;
+	}
+	return 0;
+}
+
+char **NickLists_findAllChannelsForNick(ChannelNickLists *allNickLists, char *nick) {
+	syslog(LOG_INFO, "%s: scanning all channels for %s", __FUNCTION__, nick);
+	char **results = calloc(sizeof(char *), allNickLists->channelCount);
+	if (!results) {
+		syslog(LOG_CRIT, "%s: Failed to allocate memory for channel listing.", __FUNCTION__);
+		return NULL;
+	}
+
+	struct NickLocator locator = {
+			.channelStore = results,
+			.key = nick,
+			.index = 0
+	};
+	HashTable_forEach(allNickLists->channelHash, &locator, scanForNickInAllChannels);
+	return results;
+}
+
 int NickLists_addNickToChannel(ChannelNickLists *allNickLists, char *channel, char *nick) {
 
 	HashEntry *channelHash = getNicksForChannel(allNickLists, channel);
@@ -129,7 +183,7 @@ int NickLists_addNickToChannel(ChannelNickLists *allNickLists, char *channel, ch
 			}
 		}
 	}
-
+	syslog(LOG_INFO, "%s: adding nick to channel %s", __FUNCTION__, channel);
 	return addNickToChannelHash(channelHash, nick);
 }
 

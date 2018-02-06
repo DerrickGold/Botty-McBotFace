@@ -317,12 +317,27 @@ static int userDisconnect(BotInfo *bot, IrcMsg *msg) {
 }
 
 static int userNickChange(BotInfo *bot, IrcMsg *msg) {
-  bot_rmName(bot, msg->channel, msg->nick);
+  char **chanList = NickLists_findAllChannelsForNick(&bot->allChannelNicks, msg->nick);
+  if (!chanList) {
+    syslog(LOG_CRIT, "%s: Error generating list of previously occupied channels for nick.", __FUNCTION__);
+    return -1;
+  }
 
+  bot_rmDisconnectedName(bot, msg->nick);
+
+  char *newNick = msg->msg;
   int status = 0;
-  if ((status = bot_regName(bot, msg->channel, msg->msg)) < 0)
-  	return status;
 
+  for (int i = 0; i < bot->allChannelNicks.channelCount; i++) {
+    if (!chanList[i]) continue;
+
+    if ((status = bot_regName(bot, chanList[i], newNick)) < 0) {
+      free(chanList);
+      return status;
+    }
+  }
+  syslog(LOG_INFO, "%s: registered nick %s to all previously joined channels", __FUNCTION__, newNick);
+  free(chanList);
   return callback_call_r(bot->cb, CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 

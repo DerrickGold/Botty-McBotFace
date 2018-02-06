@@ -41,7 +41,7 @@ static int onMsg(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
 
   syslog(LOG_DEBUG, "Recieved msg from %s in %s: %s", msg->nick, msg->channel, msg->msg);
-  mailNotify((BotInfo *)data, msg->channel,  msg->nick);
+  MailBox_notifyUser((BotInfo *)data, msg->channel,  msg->nick);
   links_store(msg->msg);
   return 0;
 }
@@ -49,34 +49,35 @@ static int onMsg(void *data, IrcMsg *msg) {
 static int onUsrJoin(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   syslog(LOG_INFO, "'%s' has joined the channel", msg->nick);
-  mailNotify((BotInfo *)data, msg->channel, msg->nick);
+  MailBox_notifyUser((BotInfo *)data, msg->channel, msg->nick);
   return 0;
 }
 
 static int onUsrPart(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   syslog(LOG_INFO, "%s has left the channel", msg->nick);
-
-  //reset mail notification
-  char *notStatus = getNotified(msg->nick);
-  if (notStatus) *notStatus = 0;
+  MailBox_resetUserNotification(msg->nick);
   return 0;
 }
 
 static int onUsrQuit(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   syslog(LOG_INFO, "%s has disconnected the server", msg->nick);
-  //reset mail notification
-  char *notStatus = getNotified(msg->nick);
-  if (notStatus) *notStatus = 0;
+  MailBox_resetUserNotification(msg->nick);
   return 0;
 }
 
 static int onNickChange(void *data, IrcMsg *msg) {
   if (!data || !msg) return -1;
   BotInfo *i = (BotInfo *)data;
-  botty_say(i, msg->channel, "I see what you did there %s... AKA %s!", msg->msg, msg->nick);
-  mailNotify((BotInfo *)data, msg->channel, msg->nick);
+
+  char *newNick = msg->msg;
+  syslog(LOG_DEBUG, "OldNick: %s, NewNick: %s: Channel: %s", msg->nick, newNick, msg->channel);
+  if (msg->channel) {
+    botty_say(i, msg->channel, "I see what you did there %s... AKA %s!", newNick, msg->nick);
+    MailBox_notifyUser((BotInfo *)data, msg->channel, newNick);
+  }
+
   return 0;
 }
 
@@ -115,7 +116,7 @@ int botcmd_msg(CmdData *data, char *args[MAX_BOT_ARGS]) {
     return 0;
   }
 
-  if (saveMail(to, data->msg->nick, msg)) {
+  if (MailBox_saveMsg(to, data->msg->nick, msg)) {
     botty_say(data->bot, responseTarget,
                "%s: There was an error saving your message, contact bot owner for assistance.",
                data->msg->nick);
@@ -380,7 +381,7 @@ int main(int argc, char *argv[]) {
   }
 
   botty_cleanup(&botInfo);
-  destroyAllMailBoxes();
+  MailBox_destroyAll();
   links_purge();
 
   closelog();

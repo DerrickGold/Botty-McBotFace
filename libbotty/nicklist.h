@@ -10,6 +10,7 @@ typedef struct NickListEntry {
 
 typedef struct ChannelNickLists {
 	HashTable *channelHash;
+	int channelCount;
 } ChannelNickLists;
 
 typedef void (*NickListIterator)(NickListEntry *nick, void *data);
@@ -21,4 +22,5 @@ void NickList_cleanupAllNickLists(ChannelNickLists *allNickLists);
 void NickList_forEachNickInChannel(ChannelNickLists *allNickLists, char *channel,
 	void *d, NickListIterator iterator);
 void NickLists_rmNickFromAll(ChannelNickLists *allNickLists, char *nick);
+char **NickLists_findAllChannelsForNick(ChannelNickLists *allNickLists, char *nick);
 #endif //__CHANNEL_NICK_LISTS__

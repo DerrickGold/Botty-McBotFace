@@ -62,4 +62,7 @@ char *botty_getDirectory(void);
 #define botty_makeProcessArgs(data, target, fn) \
   BotProcess_makeArgs(data, target, fn)
 
+#define botty_msgContainsValidChannel(ircmsg) \
+  ircMsg_hasChannel(ircmsg)
+
 #endif //__BOT_API_H__

@@ -47,6 +47,11 @@ int botcmd_mail(CmdData *data, char *args[MAX_BOT_ARGS]) {
 
 
 void MailBox_notifyUser(BotInfo *bot, char *channel, char *nick) {
+  if (!botty_validateChannel(channel)) {
+    syslog(LOG_WARNING, "%s: Failed to notify user: %s, invalid channel provided.", __FUNCTION__, nick);
+    return;
+  }
+
   //mail notification
   int left = numMsgs(nick);
   if (left > 0) {

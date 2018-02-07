@@ -17,5 +17,6 @@ IrcMsg *ircMsg_irc_new(char *input);
 IrcMsg *ircMsg_server_new(char *input);
 IrcMsg *ircMsg_newMsg(void);
 void ircMsg_setChannel(IrcMsg *msg, char *channel);
+char ircMsg_hasChannel(IrcMsg *msg);
 
 #endif

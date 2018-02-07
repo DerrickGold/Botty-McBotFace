@@ -118,4 +118,10 @@ typedef long long TimeStamp_t;
   milliseconds; \
 })
 
+#define botty_validateChannel(channel) ({\
+  syslog(LOG_INFO, "%s: Validating channel input '%s'...", __FUNCTION__, channel); \
+  char isValid = (channel[0] == CHANNEL_START_CHAR && strlen(channel) > 1); \
+  isValid; \
+})
+
 #endif //__GLOBALS_H__

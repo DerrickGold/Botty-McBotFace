@@ -142,7 +142,7 @@ int bot_irc_send(BotInfo *bot, char *msg) {
 
 static int _botSend(BotInfo *bot, char *target, char *action, char *ctcp, char *fmt, va_list a) {
   char *msgBuf;
-  if (!target) {
+  if (!target || target[0] == '\0') {
     syslog(LOG_WARNING, "_botSend: No response target provided!");
     return 0;
   }
@@ -313,6 +313,10 @@ static int userLeft(BotInfo *bot, IrcMsg *msg) {
 
 static int userDisconnect(BotInfo *bot, IrcMsg *msg) {
   bot_rmDisconnectedName(bot, msg->nick);
+
+  if (!botty_validateChannel(msg->channel))
+    msg->channel[0] = '\0';
+
   return callback_call_r(bot->cb, CALLBACK_USRQUIT, (void *)bot, msg);
 }
 
@@ -338,6 +342,10 @@ static int userNickChange(BotInfo *bot, IrcMsg *msg) {
   }
   syslog(LOG_INFO, "%s: registered nick %s to all previously joined channels", __FUNCTION__, newNick);
   free(chanList);
+
+  if (!botty_validateChannel(msg->channel))
+    msg->channel[0] = '\0';
+
   return callback_call_r(bot->cb, CALLBACK_USRNICKCHANGE, (void *)bot, msg);
 }
 
@@ -585,7 +593,12 @@ void bot_join(BotInfo *bot, char *channel) {
     return;
   }
 
-  syslog(LOG_NOTICE, "bot_join: %s...", channel);
+  syslog(LOG_NOTICE, "%s: Attempting to join: %s...", __FUNCTION__, channel);
+
+  if (!botty_validateChannel(channel)) {
+    syslog(LOG_ERR, "%s: Bot cannot join channel: %s, it is not a proper channel name.", __FUNCTION__, channel);
+    return;
+  }
 
   char sysBuf[MAX_MSG_LEN];
   snprintf(sysBuf, sizeof(sysBuf), JOIN_CMD_STR" %s", channel);
@@ -607,8 +620,8 @@ int bot_regName(BotInfo *bot, char *channel, char *nick) {
 		return -1;
 	}
 
-	if (!channel) {
-		syslog(LOG_CRIT, "Error registering nick '%s' to channel: Channel is NULL", nick);
+	if (!channel || !botty_validateChannel(channel)) {
+		syslog(LOG_CRIT, "Error registering nick '%s' to channel: Malformed channel provided", nick);
 		return -1;
 	}
 

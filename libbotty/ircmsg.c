@@ -24,6 +24,13 @@ void ircMsg_setChannel(IrcMsg *msg, char *channel) {
   strncpy(msg->channel, channel, MAX_CHAN_LEN);
 }
 
+char ircMsg_hasChannel(IrcMsg *msg) {
+  if (!msg)
+    return 0;
+
+  return botty_validateChannel(msg->channel);
+}
+
 
 static char *get_nick(IrcMsg *msg, char *input, char **tok_off) {
   char *tok = strtok_r(input, "!", tok_off);

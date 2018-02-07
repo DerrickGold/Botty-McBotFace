@@ -73,16 +73,19 @@ static int onNickChange(void *data, IrcMsg *msg) {
 
   char *newNick = msg->msg;
   syslog(LOG_DEBUG, "OldNick: %s, NewNick: %s: Channel: %s", msg->nick, newNick, msg->channel);
-  if (msg->channel) {
+
+  if (botty_msgContainsValidChannel(msg)) {
     botty_say(i, msg->channel, "I see what you did there %s... AKA %s!", newNick, msg->nick);
-    MailBox_notifyUser((BotInfo *)data, msg->channel, newNick);
+    MailBox_notifyUser((BotInfo *) data, msg->channel, newNick);
   }
 
   return 0;
 }
 
 static int onUsrInvite(void *data, IrcMsg *msg) {
-  botty_join((BotInfo *)data, msg->msg);
+  if (!strncmp(msg->nick, botInfo.master, MAX_NICK_LEN))
+    botty_join((BotInfo *)data, msg->msg);
+
   return 0;
 }
 
@@ -320,7 +323,7 @@ int main(int argc, char *argv[]) {
   char configPath[MAX_FILEPATH_LEN];
   char *cfgPtr = configPath;
 
-  openlog(argv[0], LOG_PERROR | LOG_CONS | LOG_PID, LOG_USER);
+  openlog(argv[0], LOG_PERROR | LOG_CONS | LOG_PID, LOG_SYSLOG);
 
   if (argc < 2) {
     realpath(argv[0], configPath);

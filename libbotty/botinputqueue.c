@@ -103,6 +103,11 @@ void BotInputQueue_pushInput(BotInputQueue *inputQueue, char *input) {
 }
 
 void BotInput_spoofUserInput(BotInputQueue *inputQueue, char *user, char *srcChannel, char *msg) {
+  if (!botty_validateChannel(srcChannel)) {
+    syslog(LOG_ERR, "%s: Failed to spoof message. Invalid srcChannel provided: %s", __FUNCTION__, srcChannel);
+    return;
+  }
+
   char spoofMsg[MAX_MSG_LEN];
   snprintf(spoofMsg, MAX_MSG_LEN - 1, ":%s!%s PRIVMSG %s :%s", user, INPUT_SPOOFED_HOSTNAME, srcChannel, msg);
   syslog(LOG_DEBUG, "Spoofing user bot input: %s", spoofMsg);

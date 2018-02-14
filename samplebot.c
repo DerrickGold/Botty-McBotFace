@@ -112,6 +112,15 @@ int botcmd_msg(CmdData *data, char *args[MAX_BOT_ARGS]) {
   char *responseTarget = botcmd_builtin_getTarget(data);
   char *to = args[1], *msg = args[2];
 
+  //prevent messages to the bot itself
+  if (!strncmp(to, bot_getNick(data->bot), MAX_NICK_LEN)) {
+    botty_say(data->bot, responseTarget,
+              "%s: Got your message, I'm always listening ;)",
+              data->msg->nick);
+
+    return 0;
+  }
+
   if (!to || !msg) {
     botty_say(data->bot, responseTarget,
                "%s: Malformed mail command, must contain a destination nick and a message.",

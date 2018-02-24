@@ -31,5 +31,6 @@ void MailBox_notifyUser(BotInfo *bot, char *channel, char *nick);
 void MailBox_resetUserNotification(char *nick);
 
 int botcmd_mail(CmdData *data, char *args[MAX_BOT_ARGS]);
+int botcmd_msg(CmdData *data, char *args[MAX_BOT_ARGS]);
 
 #endif //__BOT_MAILBOXES_H__

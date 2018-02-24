@@ -210,8 +210,8 @@ CmdAlias *command_alias_get(HashTable *cmdAliases, char *alias) {
 
 #define tokenize() do {                             \
   tok_off = strchr(tok, BOT_ARG_DELIM);             \
-  if (tok_off && i < argCount - 1) *tok_off = '\0'; \
-  msg->msgTok[i] = tok;                             \
+  if (tok_off && argNum < argCount - 1) *tok_off = '\0'; \
+  msg->msgTok[argNum] = tok;                             \
 } while(0)
 
 #define nextToken() do {  \
@@ -231,28 +231,31 @@ BotCmd *command_parse_ircmsg(IrcMsg *msg, HashTable *cmdTable, HashTable *cmdAli
   int argCount = MAX_BOT_ARGS;
   char *tok = msg->msg + 1;
   char *tok_off = NULL;
-  int i = 0;
+  int argNum = 0;
 
   tokenize();
   //check first if word is a registered command
   if ((cmd = command_get(cmdTable, msg->msgTok[CMD_NAME_POS]))) {
+    syslog(LOG_DEBUG, "Found command: %s in command list", msg->msgTok[CMD_NAME_POS]);
     argCount = cmd->args;
-    i++;
+    argNum++;
   }
   //then check if its an alias if it is not
   else if ((alias= command_alias_get(cmdAliases, msg->msgTok[CMD_NAME_POS]))) {
+    syslog(LOG_DEBUG, "Found command alias: %s in alias list", msg->msgTok[CMD_NAME_POS]);
     cmd = alias->cmd;
     argCount = alias->cmd->args;
 
-    for (i = 0; i < alias->argc; i++)
-      msg->msgTok[i] = alias->args[i];
+    for (argNum = 0; argNum < alias->argc; argNum++)
+      msg->msgTok[argNum] = alias->args[argNum];
   }
-  nextToken();
 
-  while(i < argCount) {
+  syslog(LOG_DEBUG, "Grabbing next tokens...");
+  nextToken();
+  while(argNum < argCount) {
     tokenize();
     nextToken();
-    i++;
+    argNum++;
   }
   syslog(LOG_DEBUG, "Done tokenizing command");
   return cmd;

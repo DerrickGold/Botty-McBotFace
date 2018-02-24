@@ -1,5 +1,7 @@
 #include "mailbox.h"
 
+#define ILLEGAL_DEST_NICK_CHARS "-&@+%#\"'.,/\\!()*"
+
 HashTable *mailBoxes = NULL;
 
 //get the number of messages available for a user
@@ -138,11 +140,14 @@ void MailBox_destroyAll(void) {
 
 int MailBox_saveMsg(char *to, char *from, char *message) {
 
-  if (strlen(to) > MAX_NICK_LEN) {
+  size_t destLen = strlen(to);
+
+  if (destLen > MAX_NICK_LEN) {
     syslog(LOG_WARNING, "%s: Destination nick %s is too long to be valid.", __FUNCTION__, to);
     return -1;
   }
-  if (strcspn(to, ILLEGAL_NICK_CHARS)) {
+
+  if (strcspn(to, ILLEGAL_DEST_NICK_CHARS) != destLen) {
     syslog(LOG_WARNING, "%s: Destination nick %s contains illegal characters", __FUNCTION__, to);
     return -1;
   }

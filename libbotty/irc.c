@@ -519,6 +519,14 @@ int bot_connect(BotInfo *bot) {
   return 0;
 }
 
+int bot_reconnect(BotInfo *bot) {
+  syslog(LOG_NOTICE, "Attemping reconnect to server...");
+  bot_cleanup(bot);
+  bot->state = CONSTATE_NONE;
+  bot_connect(bot);
+  return 0;
+}
+
 char *bot_getNick(BotInfo *bot) {
   return bot->nick[bot->nickAttempt];
 }
@@ -555,7 +563,8 @@ int bot_run(BotInfo *bot) {
     n = connection_client_read(&bot->conInfo, bot->recvbuf, sizeof(bot->recvbuf));
     if (!n) {
       syslog(LOG_NOTICE, "Remote closed connection");
-      return -2;
+      if (bot_reconnect(bot))
+        return -2;
     }
     else if (!bot->conInfo.enableSSL && n < 0) {
     	syslog(LOG_CRIT, "bot_run: Error getting response from connection");
